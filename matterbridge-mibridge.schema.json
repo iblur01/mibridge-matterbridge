@@ -1,0 +1,110 @@
+{
+  "title": "Matterbridge MiBridge",
+  "description": "matterbridge-mibridge by iblur01",
+  "type": "object",
+  "properties": {
+    "name": {
+      "title": "Plugin Name",
+      "description": "Plugin name",
+      "type": "string",
+      "readOnly": true,
+      "ui:widget": "hidden"
+    },
+    "type": {
+      "title": "Plugin Type",
+      "description": "Plugin type",
+      "type": "string",
+      "readOnly": true,
+      "ui:widget": "hidden"
+    },
+    "whiteList": {
+      "title": "White List",
+      "description": "Only the devices in the list will be exposed. If the list is empty, all the devices will be exposed.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true,
+      "selectFrom": "name"
+    },
+    "blackList": {
+      "title": "Black List",
+      "description": "The devices in the list will not be exposed. If the list is empty, no devices will be excluded.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true,
+      "selectFrom": "name"
+    },
+    "debug": {
+      "title": "Enable Debug",
+      "description": "Enable debug mode for the plugin. Only for debugging purposes, not recommended for production use.",
+      "type": "boolean",
+      "default": false
+    },
+    "verbose": {
+      "title": "Enable Verbose Mode",
+      "description": "Display detailed information about rooms, modes, capabilities, and robot status at startup and during operation.",
+      "type": "boolean",
+      "default": false
+    },
+    "unregisterOnShutdown": {
+      "title": "Unregister On Shutdown",
+      "description": "Unregister all devices on shutdown. Only for debugging purposes, not recommended for production use.",
+      "type": "boolean",
+      "default": false
+    },
+    "session": {
+      "title": "Xiaomi Cloud Session",
+      "description": "Xiaomi Cloud authentication session tokens. Get these from your Xiaomi account.",
+      "type": "object",
+      "required": [
+        "userId",
+        "ssecurity",
+        "serviceToken"
+      ],
+      "properties": {
+        "userId": {
+          "title": "User ID",
+          "description": "Xiaomi user ID",
+          "type": "string"
+        },
+        "ssecurity": {
+          "title": "SSecurity Token",
+          "description": "Xiaomi ssecurity token",
+          "type": "string"
+        },
+        "serviceToken": {
+          "title": "Service Token",
+          "description": "Xiaomi service token",
+          "type": "string"
+        }
+      }
+    },
+    "region": {
+      "title": "Xiaomi Region",
+      "description": "Xiaomi Cloud region for your account",
+      "type": "string",
+      "enum": [
+        "cn",
+        "de",
+        "us",
+        "ru",
+        "tw",
+        "sg",
+        "in",
+        "i2"
+      ],
+      "default": "de"
+    },
+    "pollInterval": {
+      "title": "Poll Interval (ms)",
+      "description": "How often to poll vacuum status in milliseconds",
+      "type": "number",
+      "default": 5000,
+      "minimum": 1000,
+      "maximum": 60000
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "matterbridge-mibridge",
+  "type": "AccessoryPlatform",
+  "whiteList": [],
+  "blackList": [],
+  "debug": false,
+  "unregisterOnShutdown": false
+}

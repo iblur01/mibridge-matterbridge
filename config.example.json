@@ -1,0 +1,16 @@
+{
+  "name": "matterbridge-mibridge",
+  "type": "AccessoryPlatform",
+  "session": {
+    "userId": "YOUR_XIAOMI_USER_ID",
+    "ssecurity": "YOUR_SSECURITY_TOKEN",
+    "serviceToken": "YOUR_SERVICE_TOKEN"
+  },
+  "region": "de",
+  "pollInterval": 5000,
+  "verbose": false,
+  "whiteList": [],
+  "blackList": [],
+  "debug": false,
+  "unregisterOnShutdown": false
+}

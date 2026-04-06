@@ -1,0 +1,60 @@
+{
+  "name": "matterbridge-mibridge",
+  "version": "0.0.1-alpha",
+  "description": "Matterbridge MiBridge Plugin — bridges MiHome API to Matter",
+  "author": "https://github.com/iblur01",
+  "homepage": "https://github.com/iblur01/matterbridge-mibridge",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/module.js",
+  "types": "dist/module.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/module.js",
+      "types": "./dist/module.d.ts"
+    }
+  },
+  "engines": {
+    "node": ">=20.19.0 <21.0.0 || >=22.13.0 <23.0.0 || >=24.0.0 <25.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iblur01/matterbridge-mibridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iblur01/matterbridge-mibridge/issues"
+  },
+  "keywords": [
+    "matterbridge",
+    "plugin",
+    "matter",
+    "matterprotocol",
+    "iot",
+    "smarthome",
+    "xiaomi",
+    "mihome",
+    "mibridge",
+    "vacuum",
+    "dreame",
+    "homekit",
+    "homeassistant",
+    "bridge"
+  ],
+  "files": [
+    "bin",
+    "dist",
+    "npm-shrinkwrap.json",
+    "CHANGELOG.md",
+    "*.config.json",
+    "*.schema.json"
+  ],
+  "dependencies": {
+    "@mibridge/core": "latest",
+    "node-ansi-logger": "3.2.0",
+    "node-persist-manager": "2.0.1"
+  },
+  "overrides": {
+    "eslint": "10.1.0",
+    "@eslint/js": "10.0.1"
+  }
+}
