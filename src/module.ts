@@ -6,12 +6,21 @@
  * @license Apache-2.0
  */
 
+import { Area, CleanMode, DeviceInfo, DreameVacuumClient, Session, VacuumErrorCode, VacuumMap, VacuumState } from '@mibridge/core';
 import { MatterbridgeDynamicPlatform, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { RoboticVacuumCleaner } from 'matterbridge/devices';
 import { AnsiLogger, LogLevel } from 'matterbridge/logger';
-import { XiaomiVacuumService } from './xiaomiService.js';
-import { DreameVacuumClient, Session, VacuumState, CleanMode, VacuumErrorCode } from '@mibridge/core';
 
+import { XiaomiVacuumService } from './xiaomiService.js';
+
+/**
+ * Matterbridge plugin entry point — instantiates and returns the platform.
+ *
+ * @param {PlatformMatterbridge} matterbridge - The Matterbridge instance.
+ * @param {AnsiLogger} log - The logger instance provided by Matterbridge.
+ * @param {PlatformConfig} config - The plugin configuration from the Matterbridge frontend.
+ * @returns {MibridgePlatform} The initialized platform instance.
+ */
 export default function initializePlugin(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: PlatformConfig): MibridgePlatform {
   return new MibridgePlatform(matterbridge, log, config);
 }
@@ -25,7 +34,9 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
     super(matterbridge, log, config);
 
     if (this.verifyMatterbridgeVersion === undefined || typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.4.0')) {
-      throw new Error(`This plugin requires Matterbridge version >= "3.4.0". Please update Matterbridge from ${this.matterbridge.matterbridgeVersion} to the latest version in the frontend."`);
+      throw new Error(
+        `This plugin requires Matterbridge version >= "3.4.0". Please update Matterbridge from ${this.matterbridge.matterbridgeVersion} to the latest version in the frontend."`,
+      );
     }
 
     this.verbose = config.verbose === true;
@@ -73,15 +84,15 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
   override async onShutdown(reason?: string) {
     await super.onShutdown(reason);
     this.log.info(`onShutdown called with reason: ${reason ?? 'none'}`);
-    
+
     // Disconnect Xiaomi service
     if (this.xiaomiService) {
       await this.xiaomiService.disconnect();
       this.xiaomiService = null;
     }
-    
+
     this.vacuumClients.clear();
-    
+
     if (this.config.unregisterOnShutdown === true) await this.unregisterAllDevices();
   }
 
@@ -113,9 +124,9 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
         this.log.info(`[${device.did}] Loading maps and areas...`);
         const maps = await client.getMaps();
         this.log.info(`[${device.did}] Found ${maps.length} map(s)`);
-        
+
         const areas = maps.length > 0 ? maps[0].areas : [];
-        this.log.info(`[${device.did}] Found ${areas.length} area(s): ${areas.map(a => a.name).join(', ')}`);
+        this.log.info(`[${device.did}] Found ${areas.length} area(s): ${areas.map((a) => a.name).join(', ')}`);
 
         // Prepare service areas for Matter
         const supportedAreas = areas.map((area, index) => ({
@@ -153,7 +164,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
           supportedAreas, // areas
           [], // selectedAreas
           supportedAreas.length > 0 ? supportedAreas[0].areaId : 1, // currentArea
-          supportedMaps.length > 0 ? supportedMaps : undefined // maps
+          supportedMaps.length > 0 ? supportedMaps : undefined, // maps
         );
 
         this.log.info(`[${device.did}] Created vacuum with ${supportedAreas.length} area(s)`);
@@ -175,7 +186,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
         // Add to device selection
         this.setSelectDevice(device.did, device.name);
         const selected = this.validateDevice([device.name, device.did]);
-        
+
         if (selected) {
           await this.registerDevice(vacuum);
           this.log.info(`Registered vacuum: ${device.name}`);
@@ -225,7 +236,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
 
     // Command: Select Areas (zones to clean)
     vacuum.addCommandHandler('ServiceArea.selectAreas', async ({ request }) => {
-      const areaIds = request.newAreas?.map((a: any) => String(a)) || [];
+      const areaIds = request.newAreas?.map((a: unknown) => String(a)) || [];
       this.log.info(`[${did}] selectAreas command received: ${JSON.stringify(areaIds)}`);
       try {
         await client.selectAreas(areaIds);
@@ -240,7 +251,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
     vacuum.addCommandHandler('RvcRunMode.changeToMode', async ({ request }) => {
       const mode = request.newMode;
       this.log.info(`[${did}] changeToMode command received: mode ${mode}`);
-      
+
       try {
         // Mode 0 = Idle, Mode 1 = Cleaning, Mode 2 = Mapping
         if (mode === 0) {
@@ -273,15 +284,15 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
     vacuum.addCommandHandler('RvcCleanMode.changeToMode', async ({ request }) => {
       const mode = request.newMode;
       this.log.info(`[${did}] changeToMode (clean mode) received: mode ${mode}`);
-      
+
       try {
         // Mode 0 = Vacuum, Mode 1 = Mop, Mode 2 = VacuumThenMop
-        const modeMap: Record<number, any> = {
-          0: 'vacuum',
-          1: 'mop',
-          2: 'vacuumThenMop',
+        const modeMap: Record<number, CleanMode> = {
+          0: CleanMode.Vacuum,
+          1: CleanMode.Mop,
+          2: CleanMode.VacuumThenMop,
         };
-        
+
         if (modeMap[mode]) {
           await client.setCleanMode(modeMap[mode]);
           this.log.info(`[${did}] Clean mode set to ${modeMap[mode]}`);
@@ -304,7 +315,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
       } else {
         this.log.debug(`[${did}] Status update: ${JSON.stringify(status)}`);
       }
-      
+
       // Update battery level
       if (status.batteryLevel !== undefined) {
         try {
@@ -338,8 +349,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
 
       // Detect mop pad changes
       const mopMissing = status.errorCode === VacuumErrorCode.MopPadMissing;
-      const waterMissing = status.errorCode === VacuumErrorCode.WaterTankMissing || 
-                           status.errorCode === VacuumErrorCode.WaterTankEmpty;
+      const waterMissing = status.errorCode === VacuumErrorCode.WaterTankMissing || status.errorCode === VacuumErrorCode.WaterTankEmpty;
       const currentMopPresent = !mopMissing && !waterMissing;
 
       if (lastMopPresent !== null && lastMopPresent !== currentMopPresent) {
@@ -361,7 +371,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
       } else {
         this.log.info(`[${did}] State changed to: ${state}`);
       }
-      
+
       // Update Matter operational state
       try {
         const operationalState = this.mapVacuumStateToMatter(state);
@@ -398,15 +408,15 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
     // 0x00 = Stopped, 0x01 = Running, 0x02 = Paused, 0x03 = Error
     // 0x40 = SeekingCharger, 0x41 = Charging, 0x42 = Docked
     const stateMap: Record<VacuumState, number> = {
-      [VacuumState.Idle]: 0x00,      // Stopped
-      [VacuumState.Cleaning]: 0x01,   // Running
-      [VacuumState.Mapping]: 0x01,    // Running (mapping)
-      [VacuumState.Returning]: 0x40,  // SeekingCharger
-      [VacuumState.Docked]: 0x42,     // Docked
-      [VacuumState.Paused]: 0x02,     // Paused
-      [VacuumState.Error]: 0x03,      // Error
+      [VacuumState.Idle]: 0x00, // Stopped
+      [VacuumState.Cleaning]: 0x01, // Running
+      [VacuumState.Mapping]: 0x01, // Running (mapping)
+      [VacuumState.Returning]: 0x40, // SeekingCharger
+      [VacuumState.Docked]: 0x42, // Docked
+      [VacuumState.Paused]: 0x02, // Paused
+      [VacuumState.Error]: 0x03, // Error
     };
-    
+
     return stateMap[state] ?? 0x00;
   }
 
@@ -415,18 +425,17 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
     try {
       const status = await client.getStatus();
       const supportedModes = await client.getSupportedCleanModes();
-      
+
       // Check if mop pad or water tank is missing
       const mopMissing = status.errorCode === VacuumErrorCode.MopPadMissing;
-      const waterMissing = status.errorCode === VacuumErrorCode.WaterTankMissing || 
-                           status.errorCode === VacuumErrorCode.WaterTankEmpty;
-      
+      const waterMissing = status.errorCode === VacuumErrorCode.WaterTankMissing || status.errorCode === VacuumErrorCode.WaterTankEmpty;
+
       // Check water level to infer mop presence
       const hasMop = status.waterLevel && status.waterLevel !== 'off';
-      
+
       let configuredModes: CleanMode[] = [];
       let modeDescription = '';
-      
+
       if (mopMissing || waterMissing) {
         // Mop/Water tank missing: Only vacuum mode available
         configuredModes = [CleanMode.Vacuum];
@@ -443,7 +452,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
         modeDescription = `Modes par défaut (${supportedModes.length}): ${supportedModes.join(', ')}`;
         this.log.info(`[${did}] Using default supported modes: ${supportedModes.join(', ')}`);
       }
-      
+
       // Create clean mode options for Matter
       const cleanModeOptions = configuredModes.map((mode, index) => {
         const modeLabels: Record<CleanMode, string> = {
@@ -451,14 +460,14 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
           [CleanMode.Mop]: 'Mop',
           [CleanMode.VacuumThenMop]: 'Vacuum + Mop',
         };
-        
+
         return {
           label: modeLabels[mode] || mode,
           mode: index,
           modeTags: [{ value: index + 1 }],
         };
       });
-      
+
       // Update the vacuum's supported clean modes
       try {
         vacuum.createDefaultRvcCleanModeClusterServer(0, cleanModeOptions);
@@ -466,7 +475,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
       } catch (error) {
         this.log.debug(`[${did}] Could not update clean modes (device may already be configured): ${error}`);
       }
-      
+
       // Store configuration for verbose logging
       if (this.verbose) {
         this.log.info(`[${did}] Mop Detection Results:`);
@@ -475,7 +484,6 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
         this.log.info(`     - Mop Present: ${!mopMissing && !waterMissing ? 'Yes' : 'No'}`);
         this.log.info(`     - Configured Modes: ${configuredModes.join(', ')}`);
       }
-      
     } catch (error) {
       this.log.warn(`[${did}] Could not detect mop capabilities: ${error}`);
       this.log.info(`[${did}] Using default clean modes`);
@@ -483,7 +491,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
   }
 
   // Display detailed information in verbose mode
-  private async displayVerboseInfo(device: any, client: DreameVacuumClient, maps: any[], areas: any[], supportedAreas: any[]) {
+  private async displayVerboseInfo(device: DeviceInfo, client: DreameVacuumClient, maps: VacuumMap[], areas: Area[], supportedAreas: { areaId: number }[]) {
     this.log.info(`\n${'='.repeat(80)}`);
     this.log.info(`VERBOSE MODE - Detailed Information for ${device.name}`);
     this.log.info(`${'='.repeat(80)}\n`);
@@ -559,14 +567,14 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
       this.log.info(`Supported Clean Modes (${supportedCleanModes.length}):`);
       supportedCleanModes.forEach((mode, index) => {
         const modeNames: Record<string, string> = {
-          'vacuum': 'Vacuum (Aspiration seule)',
-          'mop': 'Mop (Serpilliere seule)',
-          'vacuumThenMop': 'Vacuum + Mop (Aspiration puis serpilliere)',
+          vacuum: 'Vacuum (Aspiration seule)',
+          mop: 'Mop (Serpilliere seule)',
+          vacuumThenMop: 'Vacuum + Mop (Aspiration puis serpilliere)',
         };
         this.log.info(`   ${index + 1}. ${modeNames[mode] || mode}`);
       });
       this.log.info(``);
-    } catch (error) {
+    } catch (_error) {
       this.log.info(`Supported Clean Modes:`);
       this.log.info(`   Default: Vacuum, Mop, Vacuum+Mop`);
       this.log.info(``);
@@ -576,18 +584,20 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
     try {
       const cleanMode = await client.getCleanMode();
       const runMode = await client.getRunMode();
-      
+
       this.log.info(`Current Settings:`);
       this.log.info(`   Run Mode:   ${runMode}`);
       this.log.info(`   Clean Mode: ${cleanMode}`);
       this.log.info(``);
-    } catch (error) {
+    } catch (_error) {
       // Ignore if can't get current settings
     }
 
     // Matter mapping
     this.log.info(`Matter Integration:`);
-    this.log.info(`   Operational State: ${this.mapVacuumStateToMatter(VacuumState.Docked)} (0x${this.mapVacuumStateToMatter(VacuumState.Docked).toString(16).padStart(2, '0').toUpperCase()})`);
+    this.log.info(
+      `   Operational State: ${this.mapVacuumStateToMatter(VacuumState.Docked)} (0x${this.mapVacuumStateToMatter(VacuumState.Docked).toString(16).padStart(2, '0').toUpperCase()})`,
+    );
     this.log.info(`   Service Areas:     ${supportedAreas.length} area(s) configured`);
     this.log.info(`   Commands:          goHome, resume, pause, selectAreas, changeToMode`);
     this.log.info(``);

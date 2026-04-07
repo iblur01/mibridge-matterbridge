@@ -59,11 +59,7 @@
       "title": "Xiaomi Cloud Session",
       "description": "Xiaomi Cloud authentication session tokens. Get these from your Xiaomi account.",
       "type": "object",
-      "required": [
-        "userId",
-        "ssecurity",
-        "serviceToken"
-      ],
+      "required": ["userId", "ssecurity", "serviceToken"],
       "properties": {
         "userId": {
           "title": "User ID",
@@ -86,16 +82,7 @@
       "title": "Xiaomi Region",
       "description": "Xiaomi Cloud region for your account",
       "type": "string",
-      "enum": [
-        "cn",
-        "de",
-        "us",
-        "ru",
-        "tw",
-        "sg",
-        "in",
-        "i2"
-      ],
+      "enum": ["cn", "de", "us", "ru", "tw", "sg", "in", "i2"],
       "default": "de"
     },
     "pollInterval": {
