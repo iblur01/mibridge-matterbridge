@@ -33,19 +33,25 @@ export class VacuumAccessory extends BaseDeviceAccessory {
     const areas = maps.length > 0 ? maps[0].areas : [];
     this.log.info(`[${did}] Found ${areas.length} area(s): ${areas.map((a: Area) => a.name).join(', ')}`);
 
-    const supportedAreas = areas.map((area: Area, index: number) => ({
-      areaId: parseInt(area.id) || index + 1,
-      mapId: area.mapId ? parseInt(area.mapId) : null,
+    const supportedAreas = areas.map((area: Area, index: number) => {
+      const areaIdParsed = parseInt(area.id, 10);
+      return {
+      areaId: isNaN(areaIdParsed) ? index + 1 : areaIdParsed,
+      mapId: area.mapId ? parseInt(area.mapId, 10) : null,
       areaInfo: {
         locationInfo: { locationName: area.name, floorNumber: null, areaType: null },
         landmarkInfo: null,
       },
-    }));
+      };
+    });
 
-    const supportedMaps = maps.map((map: VacuumMap) => ({
-      mapId: parseInt(map.id) || 1,
+    const supportedMaps = maps.map((map: VacuumMap) => {
+      const mapIdParsed = parseInt(map.id, 10);
+      return {
+      mapId: isNaN(mapIdParsed) ? 1 : mapIdParsed,
       name: map.name,
-    }));
+      };
+    });
 
     const vacuum = new RoboticVacuumCleaner(
       device.name,
@@ -106,8 +112,8 @@ export class VacuumAccessory extends BaseDeviceAccessory {
       try { await client.pause(); } catch (err) { this.log.error(`[${did}] pause failed: ${err}`); throw err; }
     });
 
-    vacuum.addCommandHandler('ServiceArea.selectAreas', async ({ request }: { request: { newAreas?: unknown[] } }) => {
-      const areaIds = request.newAreas?.map((a: unknown) => String(a)) || [];
+    vacuum.addCommandHandler('ServiceArea.selectAreas', async ({ request }: { request: { newAreas?: number[] } }) => {
+      const areaIds = request.newAreas?.map((a) => String(a)) || [];
       this.log.info(`[${did}] selectAreas: ${JSON.stringify(areaIds)}`);
       try { await client.selectAreas(areaIds); } catch (err) { this.log.error(`[${did}] selectAreas failed: ${err}`); throw err; }
     });
@@ -138,7 +144,7 @@ export class VacuumAccessory extends BaseDeviceAccessory {
         1: CleanMode.Mop,
         2: CleanMode.VacuumThenMop,
       };
-      if (modeMap[mode]) {
+      if (mode in modeMap) {
         try { await client.setCleanMode(modeMap[mode]!); } catch (err) { this.log.error(`[${did}] setCleanMode failed: ${err}`); throw err; }
       }
     });
@@ -179,15 +185,6 @@ export class VacuumAccessory extends BaseDeviceAccessory {
       lastMopPresent = currentMopPresent;
     });
 
-    client.on('stateChange', async (state: VacuumState) => {
-      this.log.info(`[${did}] State changed: ${state}`);
-      try {
-        await vacuum.setAttribute('RvcOperationalState', 'operationalState', this.mapState(state));
-      } catch (err) {
-        this.log.error(`[${did}] Failed to update state: ${err}`);
-      }
-    });
-
     client.on('error', (err: Error) => { this.log.error(`[${did}] Vacuum error: ${err}`); });
     client.on('connected', () => { this.log.info(`[${did}] Vacuum client connected`); });
     client.on('disconnected', () => { this.log.warn(`[${did}] Vacuum client disconnected`); });
@@ -220,7 +217,7 @@ export class VacuumAccessory extends BaseDeviceAccessory {
       } else if (hasMop || supportedModes.includes(CleanMode.Mop)) {
         configuredModes = supportedModes;
       } else {
-        configuredModes = supportedModes;
+        configuredModes = [CleanMode.Vacuum];
       }
 
       const modeLabels: Record<CleanMode, string> = {

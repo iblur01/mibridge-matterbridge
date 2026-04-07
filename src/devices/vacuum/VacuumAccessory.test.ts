@@ -123,4 +123,74 @@ describe('VacuumAccessory', () => {
 
     expect(vacuum.setAttribute).toHaveBeenCalledWith('PowerSource', 'batPercentRemaining', 100);
   });
+
+  it('goHome command calls returnToDock on the client', async () => {
+    const accessory = new VacuumAccessory(makeLog() as any, false);
+    const platform = makePlatform();
+    const client = makeVacuumClient();
+
+    await accessory.register(platform, deviceInfo as any, client);
+    const vacuum = MockRoboticVacuumCleaner.mock.results[0]!.value;
+
+    // Find the goHome handler
+    const goHomeCall = (vacuum.addCommandHandler as jest.Mock).mock.calls.find(
+      ([name]) => name === 'RvcOperationalState.goHome',
+    );
+    expect(goHomeCall).toBeDefined();
+    const handler = goHomeCall![1] as () => Promise<void>;
+    await handler();
+
+    expect(client.returnToDock).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses vacuum-only mode when mop pad is missing', async () => {
+    const accessory = new VacuumAccessory(makeLog() as any, false);
+    const platform = makePlatform();
+    const client = makeVacuumClient();
+
+    client.getStatus.mockResolvedValue({
+      state: VacuumState.Docked,
+      batteryLevel: 100,
+      errorCode: VacuumErrorCode.MopPadMissing,
+    });
+    client.getSupportedCleanModes.mockResolvedValue([CleanMode.Vacuum, CleanMode.Mop, CleanMode.VacuumThenMop]);
+
+    await accessory.register(platform, deviceInfo as any, client);
+    const vacuum = MockRoboticVacuumCleaner.mock.results[0]!.value;
+
+    // Should only configure Vacuum mode
+    const cleanModeCall = vacuum.createDefaultRvcCleanModeClusterServer.mock.calls[0];
+    const modeOptions = cleanModeCall![1] as Array<{ label: string; mode: number }>;
+    expect(modeOptions).toHaveLength(1);
+    expect(modeOptions[0]!.label).toBe('Vacuum');
+  });
+
+  it('maps VacuumState.Docked to 0x42 and VacuumState.Cleaning to 0x01', async () => {
+    const accessory = new VacuumAccessory(makeLog() as any, false);
+    const platform = makePlatform();
+    const client = makeVacuumClient();
+
+    await accessory.register(platform, deviceInfo as any, client);
+    const vacuum = MockRoboticVacuumCleaner.mock.results[0]!.value;
+
+    client.emit('statusChange', {
+      state: VacuumState.Docked,
+      batteryLevel: 100,
+      errorCode: VacuumErrorCode.None,
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(vacuum.setAttribute).toHaveBeenCalledWith('RvcOperationalState', 'operationalState', 0x42);
+
+    vacuum.setAttribute.mockClear();
+
+    client.emit('statusChange', {
+      state: VacuumState.Cleaning,
+      batteryLevel: 100,
+      errorCode: VacuumErrorCode.None,
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(vacuum.setAttribute).toHaveBeenCalledWith('RvcOperationalState', 'operationalState', 0x01);
+  });
 });
