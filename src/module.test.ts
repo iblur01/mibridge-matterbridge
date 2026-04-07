@@ -209,6 +209,24 @@ describe('MibridgePlatform', () => {
 
       expect(mockService.disconnect).toHaveBeenCalledTimes(1);
     });
+
+    it('calls unregisterAllDevices when unregisterOnShutdown is true', async () => {
+      const mockService = makeMockService();
+      MockServiceClass.mockImplementation(() => mockService);
+      MockAccessoryClass.mockImplementation(() => makeMockAccessory());
+
+      const matterbridge = makeMatterbridge();
+      const unregisterAllDevices = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+      (matterbridge as any).unregisterAllDevices = unregisterAllDevices;
+
+      const platform = new MibridgePlatform(matterbridge as any, makeLog() as any, makeConfig({ unregisterOnShutdown: true }));
+      // Need to access unregisterAllDevices on the platform itself (it's inherited from base)
+      (platform as any).unregisterAllDevices = unregisterAllDevices;
+      await platform.onStart('test');
+      await platform.onShutdown('test');
+
+      expect(unregisterAllDevices).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('initializePlugin', () => {

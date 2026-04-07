@@ -9,15 +9,16 @@ import { listDevices, Session } from '@mibridge/core';
 import { MatterbridgeDynamicPlatform, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { AnsiLogger, LogLevel } from 'matterbridge/logger';
 import { BaseDeviceService } from './platform/DeviceService.js';
+import { PlatformContext } from './platform/DeviceAccessory.js';
 import { registry } from './platform/registry.js';
 
 export default function initializePlugin(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: PlatformConfig): MibridgePlatform {
   return new MibridgePlatform(matterbridge, log, config);
 }
 
-export class MibridgePlatform extends MatterbridgeDynamicPlatform {
+export class MibridgePlatform extends MatterbridgeDynamicPlatform implements PlatformContext {
   private services: BaseDeviceService[] = [];
-  private verbose = false;
+  verbose = false;
 
   constructor(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: PlatformConfig) {
     super(matterbridge, log, config);
@@ -43,6 +44,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
       return;
     }
 
+    // @mibridge/core requires savedAt on Session, but it is not used for cloud auth
     const session: Session = { ...sessionConfig, savedAt: '2024-01-01T00:00:00.000Z' };
     const region = (this.config.region as string) ?? 'de';
     const pollInterval = (this.config.pollInterval as number) ?? 5000;
