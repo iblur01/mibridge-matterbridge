@@ -1,6 +1,5 @@
 /**
  * Vacuum device service — discovers and manages DreameVacuumClient instances.
- * Adapted from XiaomiVacuumService to use BaseDeviceService.
  *
  * @file devices/vacuum/VacuumService.ts
  * @license Apache-2.0
@@ -9,7 +8,7 @@ import { DeviceInfo, DreameVacuumClient } from '@mibridge/core';
 import { BaseDeviceService } from '../../platform/DeviceService.js';
 
 export class VacuumService extends BaseDeviceService {
-  readonly modelPatterns = ['dreame', 'vacuum', 'roborock'] as const;
+  readonly modelPatterns = ['dreame', 'roborock'] as const;
 
   private clients: Map<string, DreameVacuumClient> = new Map();
   private devices: DeviceInfo[] = [];

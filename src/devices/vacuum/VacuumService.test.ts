@@ -8,16 +8,17 @@ import type { XiaomiServiceConfig } from '../../platform/DeviceService.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const MockDreameVacuumClient = jest.fn();
+const mockDreameVacuumClient = jest.fn();
 
 jest.unstable_mockModule('@mibridge/core', () => ({
-  DreameVacuumClient: MockDreameVacuumClient,
+  DreameVacuumClient: mockDreameVacuumClient,
 }));
 
 jest.unstable_mockModule('matterbridge/logger', () => ({
   AnsiLogger: jest.fn(),
 }));
 
+// Dynamic imports after mock registrations
 const { VacuumService } = await import('./VacuumService.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ function makeMockClient(connected = false) {
 }
 
 const vacuumDevice = { did: 'did-vac-1', name: 'Vacuum', model: 'dreame.vacuum.p2150' };
+const vacuumDevice2 = { did: 'did-vac-2', name: 'Vacuum 2', model: 'roborock.vacuum.s7' };
 const fountainDevice = { did: 'did-fountain-1', name: 'Fountain', model: 'mmgg.pet_waterer.wi11' };
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -62,25 +64,26 @@ describe('VacuumService', () => {
       expect(svc.getDevices()).toHaveLength(0);
     });
 
-    it('exposes dreame, vacuum, roborock patterns', () => {
+    it('exposes dreame and roborock patterns', () => {
       const svc = new VacuumService(log as any, makeConfig());
       expect(svc.modelPatterns).toContain('dreame');
       expect(svc.modelPatterns).toContain('roborock');
+      expect(svc.modelPatterns).not.toContain('vacuum');
     });
   });
 
   describe('connect', () => {
     it('filters vacuum devices and creates one client per vacuum', async () => {
       const mockClientInstance = makeMockClient();
-      MockDreameVacuumClient.mockImplementation(() => mockClientInstance);
+      mockDreameVacuumClient.mockImplementation(() => mockClientInstance);
 
       const svc = new VacuumService(log as any, makeConfig());
       await svc.connect([vacuumDevice, fountainDevice] as any);
 
       expect(svc.getDevices()).toHaveLength(1);
       expect(svc.getDevices()[0]!.did).toBe('did-vac-1');
-      expect(MockDreameVacuumClient).toHaveBeenCalledTimes(1);
-      expect(MockDreameVacuumClient).toHaveBeenCalledWith({
+      expect(mockDreameVacuumClient).toHaveBeenCalledTimes(1);
+      expect(mockDreameVacuumClient).toHaveBeenCalledWith({
         deviceId: 'did-vac-1',
         region: 'de',
         pollInterval: 5000,
@@ -93,14 +96,14 @@ describe('VacuumService', () => {
       await svc.connect([fountainDevice] as any);
 
       expect(svc.getDevices()).toHaveLength(0);
-      expect(MockDreameVacuumClient).not.toHaveBeenCalled();
+      expect(mockDreameVacuumClient).not.toHaveBeenCalled();
     });
   });
 
   describe('connectDevice', () => {
     it('calls connect() on a disconnected client and returns it', async () => {
       const mockClientInstance = makeMockClient(false);
-      MockDreameVacuumClient.mockImplementation(() => mockClientInstance);
+      mockDreameVacuumClient.mockImplementation(() => mockClientInstance);
 
       const svc = new VacuumService(log as any, makeConfig());
       await svc.connect([vacuumDevice] as any);
@@ -112,7 +115,7 @@ describe('VacuumService', () => {
 
     it('does not reconnect an already-connected client', async () => {
       const mockClientInstance = makeMockClient(true);
-      MockDreameVacuumClient.mockImplementation(() => mockClientInstance);
+      mockDreameVacuumClient.mockImplementation(() => mockClientInstance);
 
       const svc = new VacuumService(log as any, makeConfig());
       await svc.connect([vacuumDevice] as any);
@@ -131,20 +134,23 @@ describe('VacuumService', () => {
 
   describe('disconnect', () => {
     it('disconnects all connected clients and clears state', async () => {
-      const mockClientInstance = makeMockClient(true);
-      MockDreameVacuumClient.mockImplementation(() => mockClientInstance);
+      const client1 = makeMockClient(true);
+      const client2 = makeMockClient(true);
+      let callCount = 0;
+      mockDreameVacuumClient.mockImplementation(() => (callCount++ === 0 ? client1 : client2));
 
       const svc = new VacuumService(log as any, makeConfig());
-      await svc.connect([vacuumDevice] as any);
+      await svc.connect([vacuumDevice, vacuumDevice2] as any);
       await svc.disconnect();
 
-      expect(mockClientInstance.disconnect).toHaveBeenCalledTimes(1);
+      expect(client1.disconnect).toHaveBeenCalledTimes(1);
+      expect(client2.disconnect).toHaveBeenCalledTimes(1);
       expect(svc.getDevices()).toHaveLength(0);
     });
 
     it('skips disconnect for non-connected clients', async () => {
       const mockClientInstance = makeMockClient(false);
-      MockDreameVacuumClient.mockImplementation(() => mockClientInstance);
+      mockDreameVacuumClient.mockImplementation(() => mockClientInstance);
 
       const svc = new VacuumService(log as any, makeConfig());
       await svc.connect([vacuumDevice] as any);
