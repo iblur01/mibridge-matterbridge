@@ -132,7 +132,6 @@ describe('FountainAccessory', () => {
           expect.objectContaining({ name: 'MA-powerSource' }),
         ]),
         expect.objectContaining({ id: expect.stringContaining('did-1') }),
-        'server',
       );
     });
 
@@ -308,7 +307,7 @@ describe('FountainAccessory', () => {
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.invokeCommand('valveConfigurationAndControl.open');
+      await endpoint.invokeCommand('ValveConfigurationAndControl.open');
 
       expect(client.setOn).toHaveBeenCalledWith(true);
     });
@@ -320,7 +319,7 @@ describe('FountainAccessory', () => {
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.invokeCommand('valveConfigurationAndControl.close');
+      await endpoint.invokeCommand('ValveConfigurationAndControl.close');
 
       expect(client.setOn).toHaveBeenCalledWith(false);
     });

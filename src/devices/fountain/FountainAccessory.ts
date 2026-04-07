@@ -11,6 +11,8 @@ import { MatterbridgeEndpoint, powerSource, waterValve } from 'matterbridge';
 import { BaseDeviceAccessory, PlatformContext } from '../../platform/DeviceAccessory.js';
 
 export class FountainAccessory extends BaseDeviceAccessory {
+  private currentMode: string | null = null;
+
   async register(
     platform: PlatformContext,
     device: DeviceInfo,
@@ -22,7 +24,6 @@ export class FountainAccessory extends BaseDeviceAccessory {
     const endpoint = new MatterbridgeEndpoint(
       [waterValve, powerSource],
       { id: `${device.name.replaceAll(' ', '')}-${did}`, mode: 'server' },
-      'server',
     );
 
     endpoint
@@ -38,7 +39,7 @@ export class FountainAccessory extends BaseDeviceAccessory {
     this.syncState(endpoint, initialStatus, did);
 
     // Commands: Apple Home valve open/close → pump on/off
-    endpoint.addCommandHandler('valveConfigurationAndControl.open', async () => {
+    endpoint.addCommandHandler('ValveConfigurationAndControl.open', async () => {
       this.log.info(`[${did}] open command received`);
       try {
         await fountainClient.setOn(true);
@@ -48,7 +49,7 @@ export class FountainAccessory extends BaseDeviceAccessory {
       }
     });
 
-    endpoint.addCommandHandler('valveConfigurationAndControl.close', async () => {
+    endpoint.addCommandHandler('ValveConfigurationAndControl.close', async () => {
       this.log.info(`[${did}] close command received`);
       try {
         await fountainClient.setOn(false);
@@ -108,6 +109,8 @@ export class FountainAccessory extends BaseDeviceAccessory {
   }
 
   private syncState(endpoint: MatterbridgeEndpoint, status: FountainStatus, did: string): void {
+    this.currentMode = status.mode;
+
     // Valve state: 1 = Open (pump on), 0 = Closed (pump off)
     const valveState = status.on ? 1 : 0;
     endpoint.setAttribute('valveConfigurationAndControl', 'currentState', valveState);
