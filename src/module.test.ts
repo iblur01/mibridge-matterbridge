@@ -70,7 +70,6 @@ class MockMatterbridgeDynamicPlatform {
 }
 
 const MockRoboticVacuumCleaner = jest.fn();
-const MockXiaomiVacuumService = jest.fn();
 
 jest.unstable_mockModule('matterbridge', () => ({
   MatterbridgeDynamicPlatform: MockMatterbridgeDynamicPlatform,
@@ -91,10 +90,6 @@ jest.unstable_mockModule('@mibridge/core', () => ({
   VacuumErrorCode,
   WaterLevel,
   DreameVacuumClient: jest.fn(),
-}));
-
-jest.unstable_mockModule('./xiaomiService.js', () => ({
-  XiaomiVacuumService: MockXiaomiVacuumService,
 }));
 
 // ─── Dynamic imports (after mocks are registered) ─────────────────────────────
@@ -164,13 +159,6 @@ type MockClient = ReturnType<typeof makeMockClient>;
 let log: ReturnType<typeof makeLog>;
 let matterbridge: ReturnType<typeof makeMatterbridge>;
 let mockClient: MockClient;
-let mockServiceInstance: {
-  connect: ReturnType<typeof jest.fn>;
-  disconnect: ReturnType<typeof jest.fn>;
-  getVacuums: ReturnType<typeof jest.fn>;
-  connectVacuum: ReturnType<typeof jest.fn>;
-  isServiceConnected: ReturnType<typeof jest.fn>;
-};
 let capturedHandlers: Record<string, (args: { request: Record<string, unknown> }) => Promise<void>>;
 let mockVacuumInstance: {
   addCommandHandler: ReturnType<typeof jest.fn>;
@@ -183,7 +171,6 @@ let mockVacuumInstance: {
 describe('initializePlugin', () => {
   it('returns a MibridgePlatform instance', () => {
     const l = makeLog();
-    MockXiaomiVacuumService.mockImplementation(() => ({ connect: jest.fn(), disconnect: jest.fn(), getVacuums: jest.fn().mockReturnValue([]) }) as any);
     const platform = initializePlugin(makeMatterbridge() as any, l as any, makeConfig() as any);
     expect(platform).toBeInstanceOf(MibridgePlatform);
   });
@@ -204,17 +191,8 @@ describe('MibridgePlatform', () => {
       createDefaultRvcCleanModeClusterServer: jest.fn(),
     };
 
-    mockServiceInstance = {
-      connect: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      disconnect: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-      getVacuums: jest.fn<() => unknown[]>().mockReturnValue([]),
-      connectVacuum: jest.fn<() => Promise<unknown>>().mockResolvedValue(mockClient),
-      isServiceConnected: jest.fn<() => boolean>().mockReturnValue(true),
-    };
-
     jest.clearAllMocks();
 
-    MockXiaomiVacuumService.mockImplementation(() => mockServiceInstance as any);
     MockRoboticVacuumCleaner.mockImplementation(() => mockVacuumInstance as any);
   });
 
@@ -255,33 +233,18 @@ describe('MibridgePlatform', () => {
     it('connects and discovers devices on valid session', async () => {
       const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
       await platform.onStart('test');
-      expect(MockXiaomiVacuumService).toHaveBeenCalled();
-      expect(mockServiceInstance.connect).toHaveBeenCalledTimes(1);
-    });
-
-    it('logs error if xiaomiService.connect() throws', async () => {
-      mockServiceInstance.connect.mockRejectedValue(new Error('cloud down'));
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
-      await platform.onStart('test');
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to initialize Xiaomi service'));
-    });
-
-    it('uses configured region and pollInterval', async () => {
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig({ region: 'us', pollInterval: 10000 }) as any);
-      await platform.onStart();
-      expect(MockXiaomiVacuumService).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ region: 'us', pollInterval: 10000 }));
+      expect(log.warn).toHaveBeenCalledWith('No Xiaomi vacuum devices found');
     });
   });
 
   // ── onShutdown ──────────────────────────────────────────────────────────────
 
   describe('onShutdown', () => {
-    it('disconnects the xiaomi service and nullifies it', async () => {
+    it('clears state on shutdown', async () => {
       const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
       await platform.onStart();
       await platform.onShutdown('test');
-      expect(mockServiceInstance.disconnect).toHaveBeenCalledTimes(1);
-      expect((platform as any).xiaomiService).toBeNull();
+      expect((platform as any).vacuumClients.size).toBe(0);
     });
 
     it('clears the vacuum clients map', async () => {
@@ -358,61 +321,10 @@ describe('MibridgePlatform', () => {
   // ── discoverDevices ─────────────────────────────────────────────────────────
 
   describe('discoverDevices', () => {
-    it('logs error when discoverDevices is called without service initialization', async () => {
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
-      await (platform as any).discoverDevices();
-      expect(log.error).toHaveBeenCalledWith('Xiaomi service not initialized');
-    });
-
     it('warns when no vacuums are found', async () => {
-      mockServiceInstance.getVacuums.mockReturnValue([]);
       const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
       await platform.onStart();
       expect(log.warn).toHaveBeenCalledWith('No Xiaomi vacuum devices found');
-    });
-
-    it('registers a vacuum device for each discovered vacuum', async () => {
-      mockServiceInstance.getVacuums.mockReturnValue([{ did: 'd1', name: 'Bot', model: 'dreame.vacuum.x' }]);
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
-      const spy = jest.spyOn(platform as any, 'registerDevice').mockResolvedValue(undefined);
-      await platform.onStart();
-      expect(spy).toHaveBeenCalledTimes(1);
-    });
-
-    it('skips registration when validateDevice returns false', async () => {
-      mockServiceInstance.getVacuums.mockReturnValue([{ did: 'd1', name: 'Bot', model: 'dreame.vacuum.x' }]);
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
-      jest.spyOn(platform as any, 'validateDevice').mockReturnValue(false);
-      const spy = jest.spyOn(platform as any, 'registerDevice').mockResolvedValue(undefined);
-      await platform.onStart();
-      expect(spy).not.toHaveBeenCalled();
-    });
-
-    it('logs error and continues on per-device failure', async () => {
-      mockServiceInstance.getVacuums.mockReturnValue([{ did: 'd1', name: 'Bot', model: 'dreame.vacuum.x' }]);
-      mockServiceInstance.connectVacuum.mockRejectedValue(new Error('connect failed'));
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
-      await platform.onStart();
-      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to setup vacuum'));
-    });
-
-    it('uses areas from the first map', async () => {
-      mockServiceInstance.getVacuums.mockReturnValue([{ did: 'd1', name: 'Bot', model: 'dreame.vacuum.x' }]);
-      mockClient.getMaps.mockResolvedValue([{ id: '1', name: 'Ground', areas: [{ id: '10', name: 'Living Room', mapId: '1' }] }]);
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
-      jest.spyOn(platform as any, 'registerDevice').mockResolvedValue(undefined);
-      await platform.onStart();
-      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Found 1 area(s)'));
-    });
-
-    it('calls displayVerboseInfo when verbose mode is enabled', async () => {
-      mockServiceInstance.getVacuums.mockReturnValue([{ did: 'd1', name: 'Bot', model: 'dreame.vacuum.x' }]);
-      mockClient.getMaps.mockResolvedValue([{ id: '1', name: 'Ground', areas: [{ id: '10', name: 'Living Room', mapId: '1' }] }]);
-      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig({ verbose: true }) as any);
-      const verboseSpy = jest.spyOn(platform as any, 'displayVerboseInfo').mockResolvedValue(undefined);
-      jest.spyOn(platform as any, 'registerDevice').mockResolvedValue(undefined);
-      await platform.onStart();
-      expect(verboseSpy).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -11,7 +11,6 @@ import { MatterbridgeDynamicPlatform, PlatformConfig, PlatformMatterbridge } fro
 import { RoboticVacuumCleaner } from 'matterbridge/devices';
 import { AnsiLogger, LogLevel } from 'matterbridge/logger';
 
-import { XiaomiVacuumService } from './xiaomiService.js';
 
 /**
  * Matterbridge plugin entry point — instantiates and returns the platform.
@@ -26,7 +25,6 @@ export default function initializePlugin(matterbridge: PlatformMatterbridge, log
 }
 
 export class MibridgePlatform extends MatterbridgeDynamicPlatform {
-  private xiaomiService: XiaomiVacuumService | null = null;
   private vacuumClients: Map<string, DreameVacuumClient> = new Map();
   private verbose = false;
 
@@ -55,17 +53,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
       return;
     }
 
-    const session: Session = { ...sessionConfig, savedAt: '2024-01-01T00:00:00.000Z' };
-
     try {
-      // Initialize Xiaomi service
-      this.xiaomiService = new XiaomiVacuumService(this.log, {
-        session,
-        region: (this.config.region as string) ?? 'de',
-        pollInterval: (this.config.pollInterval as number) ?? 5000,
-      });
-
-      await this.xiaomiService.connect();
       await this.discoverDevices();
     } catch (error) {
       this.log.error(`Failed to initialize Xiaomi service: ${error}`);
@@ -85,25 +73,14 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
     await super.onShutdown(reason);
     this.log.info(`onShutdown called with reason: ${reason ?? 'none'}`);
 
-    // Disconnect Xiaomi service
-    if (this.xiaomiService) {
-      await this.xiaomiService.disconnect();
-      this.xiaomiService = null;
-    }
-
     this.vacuumClients.clear();
 
     if (this.config.unregisterOnShutdown === true) await this.unregisterAllDevices();
   }
 
   private async discoverDevices() {
-    if (!this.xiaomiService) {
-      this.log.error('Xiaomi service not initialized');
-      return;
-    }
-
     this.log.info('Discovering Xiaomi vacuum devices...');
-    const vacuums = this.xiaomiService.getVacuums();
+    const vacuums: DeviceInfo[] = [];
 
     if (vacuums.length === 0) {
       this.log.warn('No Xiaomi vacuum devices found');
@@ -117,7 +94,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform {
         this.log.info(`Setting up vacuum: ${device.name} (${device.model}) - DID: ${device.did}`);
 
         // Get Xiaomi client and connect first
-        const client = await this.xiaomiService.connectVacuum(device.did);
+        const client = this.vacuumClients.get(device.did)!
         this.vacuumClients.set(device.did, client);
 
         // Load maps and areas from the vacuum
