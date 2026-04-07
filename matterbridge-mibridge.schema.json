@@ -14,6 +14,8 @@
       "title": "Plugin Type",
       "description": "Plugin type",
       "type": "string",
+      "const": "DynamicPlatform",
+      "default": "DynamicPlatform",
       "readOnly": true,
       "ui:widget": "hidden"
     },

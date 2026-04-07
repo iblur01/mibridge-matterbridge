@@ -358,6 +358,12 @@ describe('MibridgePlatform', () => {
   // ── discoverDevices ─────────────────────────────────────────────────────────
 
   describe('discoverDevices', () => {
+    it('logs error when discoverDevices is called without service initialization', async () => {
+      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
+      await (platform as any).discoverDevices();
+      expect(log.error).toHaveBeenCalledWith('Xiaomi service not initialized');
+    });
+
     it('warns when no vacuums are found', async () => {
       mockServiceInstance.getVacuums.mockReturnValue([]);
       const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
@@ -397,6 +403,16 @@ describe('MibridgePlatform', () => {
       jest.spyOn(platform as any, 'registerDevice').mockResolvedValue(undefined);
       await platform.onStart();
       expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Found 1 area(s)'));
+    });
+
+    it('calls displayVerboseInfo when verbose mode is enabled', async () => {
+      mockServiceInstance.getVacuums.mockReturnValue([{ did: 'd1', name: 'Bot', model: 'dreame.vacuum.x' }]);
+      mockClient.getMaps.mockResolvedValue([{ id: '1', name: 'Ground', areas: [{ id: '10', name: 'Living Room', mapId: '1' }] }]);
+      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig({ verbose: true }) as any);
+      const verboseSpy = jest.spyOn(platform as any, 'displayVerboseInfo').mockResolvedValue(undefined);
+      jest.spyOn(platform as any, 'registerDevice').mockResolvedValue(undefined);
+      await platform.onStart();
+      expect(verboseSpy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -464,6 +480,53 @@ describe('MibridgePlatform', () => {
       await (platform as any).detectAndConfigureMopCapabilities('d1', mockClient, mockVacuumInstance);
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Could not detect mop capabilities'));
     });
+
+    it('uses default supported modes when mop is not explicitly detected', async () => {
+      mockClient.getStatus.mockResolvedValue({
+        state: VacuumState.Idle,
+        batteryLevel: 100,
+        cleanMode: CleanMode.Vacuum,
+        runMode: 'idle',
+        errorCode: VacuumErrorCode.None,
+        waterLevel: WaterLevel.Off,
+      });
+      mockClient.getSupportedCleanModes.mockResolvedValue([CleanMode.Vacuum]);
+      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
+      await (platform as any).detectAndConfigureMopCapabilities('d1', mockClient, mockVacuumInstance);
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Using default supported modes'));
+    });
+
+    it('logs debug when clean mode cluster update throws', async () => {
+      mockClient.getStatus.mockResolvedValue({
+        state: VacuumState.Idle,
+        batteryLevel: 100,
+        cleanMode: CleanMode.Vacuum,
+        runMode: 'idle',
+        errorCode: VacuumErrorCode.None,
+        waterLevel: 'medium',
+      });
+      mockVacuumInstance.createDefaultRvcCleanModeClusterServer.mockImplementation(() => {
+        throw new Error('already configured');
+      });
+      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
+      await (platform as any).detectAndConfigureMopCapabilities('d1', mockClient, mockVacuumInstance);
+      expect(log.debug).toHaveBeenCalledWith(expect.stringContaining('Could not update clean modes'));
+    });
+
+    it('logs detailed mop detection info in verbose mode', async () => {
+      mockClient.getStatus.mockResolvedValue({
+        state: VacuumState.Idle,
+        batteryLevel: 100,
+        cleanMode: CleanMode.Vacuum,
+        runMode: 'idle',
+        errorCode: VacuumErrorCode.None,
+        waterLevel: 'medium',
+      });
+      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig({ verbose: true }) as any);
+      await (platform as any).detectAndConfigureMopCapabilities('d1', mockClient, mockVacuumInstance);
+      expect(log.info).toHaveBeenCalledWith('[d1] Mop Detection Results:');
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Configured Modes:'));
+    });
   });
 
   // ── setupCommandHandlers ────────────────────────────────────────────────────
@@ -506,6 +569,18 @@ describe('MibridgePlatform', () => {
       expect(mockClient.pause).toHaveBeenCalledTimes(1);
     });
 
+    it('resume rethrows on client error', async () => {
+      mockClient.resume.mockRejectedValue(new Error('resume fail'));
+      await expect(capturedHandlers['RvcOperationalState.resume']({ request: {} })).rejects.toThrow('resume fail');
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to resume'));
+    });
+
+    it('pause rethrows on client error', async () => {
+      mockClient.pause.mockRejectedValue(new Error('pause fail'));
+      await expect(capturedHandlers['RvcOperationalState.pause']({ request: {} })).rejects.toThrow('pause fail');
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to pause'));
+    });
+
     it('selectAreas maps area IDs and calls client.selectAreas()', async () => {
       await capturedHandlers['ServiceArea.selectAreas']({ request: { newAreas: [1, 2, 3] } });
       expect(mockClient.selectAreas).toHaveBeenCalledWith(['1', '2', '3']);
@@ -514,6 +589,12 @@ describe('MibridgePlatform', () => {
     it('selectAreas with empty newAreas calls client.selectAreas([])', async () => {
       await capturedHandlers['ServiceArea.selectAreas']({ request: {} });
       expect(mockClient.selectAreas).toHaveBeenCalledWith([]);
+    });
+
+    it('selectAreas rethrows on client error', async () => {
+      mockClient.selectAreas.mockRejectedValue(new Error('select fail'));
+      await expect(capturedHandlers['ServiceArea.selectAreas']({ request: { newAreas: [42] } })).rejects.toThrow('select fail');
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to select areas'));
     });
 
     it('changeToMode(0) calls client.stop()', async () => {
@@ -540,6 +621,12 @@ describe('MibridgePlatform', () => {
       expect(mockClient.startMapping).toHaveBeenCalledTimes(1);
     });
 
+    it('changeToMode rethrows when client operation fails', async () => {
+      mockClient.stop.mockRejectedValue(new Error('stop fail'));
+      await expect(capturedHandlers['RvcRunMode.changeToMode']({ request: { newMode: 0 } })).rejects.toThrow('stop fail');
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to change mode'));
+    });
+
     it('cleanMode changeToMode(0) calls client.setCleanMode(Vacuum)', async () => {
       await capturedHandlers['RvcCleanMode.changeToMode']({ request: { newMode: 0 } });
       expect(mockClient.setCleanMode).toHaveBeenCalledWith(CleanMode.Vacuum);
@@ -558,6 +645,12 @@ describe('MibridgePlatform', () => {
     it('cleanMode changeToMode with unknown mode does nothing', async () => {
       await capturedHandlers['RvcCleanMode.changeToMode']({ request: { newMode: 99 } });
       expect(mockClient.setCleanMode).not.toHaveBeenCalled();
+    });
+
+    it('cleanMode changeToMode rethrows when setCleanMode fails', async () => {
+      mockClient.setCleanMode.mockRejectedValue(new Error('mode fail'));
+      await expect(capturedHandlers['RvcCleanMode.changeToMode']({ request: { newMode: 1 } })).rejects.toThrow('mode fail');
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to change clean mode'));
     });
   });
 
@@ -605,6 +698,54 @@ describe('MibridgePlatform', () => {
       });
       await Promise.resolve();
       expect(mockVacuumInstance.setAttribute).toHaveBeenCalledWith('RvcOperationalState', 'operationalState', 0x01);
+    });
+
+    it('statusChange logs verbose details when verbose mode is enabled', async () => {
+      const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+      const verbosePlatform = new MibridgePlatform(matterbridge as any, log as any, makeConfig({ verbose: true }) as any);
+      (verbosePlatform as any).setupEventListeners(mockVacuumInstance, mockClient, 'did-v');
+      mockClient.emit('statusChange', {
+        state: VacuumState.Cleaning,
+        batteryLevel: 77,
+        cleanMode: CleanMode.Mop,
+        runMode: 'cleaning',
+        errorCode: VacuumErrorCode.None,
+      });
+      await flush();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Status update: state=cleaning'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Battery level: 77%'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Operational state: cleaning -> Matter'));
+    });
+
+    it('statusChange logs debug when battery update fails', async () => {
+      mockVacuumInstance.setAttribute.mockImplementation(async (cluster: string) => {
+        if (cluster === 'PowerSource') throw new Error('battery attr fail');
+      });
+      mockClient.emit('statusChange', {
+        state: VacuumState.Docked,
+        batteryLevel: 30,
+        cleanMode: CleanMode.Vacuum,
+        runMode: 'idle',
+        errorCode: VacuumErrorCode.None,
+      });
+      await Promise.resolve();
+      expect(log.debug).toHaveBeenCalledWith(expect.stringContaining('Could not update battery level'));
+    });
+
+    it('statusChange logs debug when operational state update fails', async () => {
+      const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+      mockVacuumInstance.setAttribute.mockImplementation(async (cluster: string) => {
+        if (cluster === 'RvcOperationalState') throw new Error('state attr fail');
+      });
+      mockClient.emit('statusChange', {
+        state: VacuumState.Docked,
+        batteryLevel: 30,
+        cleanMode: CleanMode.Vacuum,
+        runMode: 'idle',
+        errorCode: VacuumErrorCode.None,
+      });
+      await flush();
+      expect(log.debug).toHaveBeenCalledWith(expect.stringContaining('Could not update operational state'));
     });
 
     it('statusChange reconfigures mop when mop is detected after being absent', async () => {
@@ -672,6 +813,15 @@ describe('MibridgePlatform', () => {
       expect(mockVacuumInstance.setAttribute).toHaveBeenCalledWith('RvcOperationalState', 'operationalState', 0x40);
     });
 
+    it('stateChange logs verbose state transitions when verbose mode is enabled', async () => {
+      const verbosePlatform = new MibridgePlatform(matterbridge as any, log as any, makeConfig({ verbose: true }) as any);
+      (verbosePlatform as any).setupEventListeners(mockVacuumInstance, mockClient, 'did-v');
+      mockClient.emit('stateChange', VacuumState.Docked);
+      await Promise.resolve();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('State changed to: DOCKED'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Matter state synchronized'));
+    });
+
     it('stateChange logs error if setAttribute throws', async () => {
       mockVacuumInstance.setAttribute.mockRejectedValue(new Error('attr fail'));
       mockClient.emit('stateChange', VacuumState.Docked);
@@ -692,6 +842,58 @@ describe('MibridgePlatform', () => {
     it('disconnected event logs warning', () => {
       mockClient.emit('disconnected');
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Vacuum client disconnected'));
+    });
+  });
+
+  // ── displayVerboseInfo ───────────────────────────────────────────────────────
+
+  describe('displayVerboseInfo', () => {
+    it('prints full verbose details with maps, areas and current settings', async () => {
+      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig({ pollInterval: 7000, region: 'us' }) as any);
+      mockClient.getInfo.mockResolvedValue({ model: 'dreame.v1', firmwareVersion: '2.0', serialNumber: 'SER-1' });
+      mockClient.getStatus.mockResolvedValue({
+        state: VacuumState.Cleaning,
+        runMode: 'cleaning',
+        cleanMode: CleanMode.Mop,
+        batteryLevel: 66,
+        waterLevel: 'low',
+        errorCode: 'stuck',
+        currentAreaId: '12',
+      });
+      mockClient.getSupportedCleanModes.mockResolvedValue([CleanMode.Vacuum, CleanMode.Mop, CleanMode.VacuumThenMop]);
+      mockClient.getCleanMode.mockResolvedValue(CleanMode.Mop);
+      mockClient.getRunMode.mockResolvedValue('cleaning');
+
+      await (platform as any).displayVerboseInfo(
+        { did: 'd1', name: 'Bot' },
+        mockClient,
+        [{ id: '1', name: 'Home', areas: [{ id: '12', name: 'Kitchen', mapId: '1' }] }],
+        [{ id: '12', name: 'Kitchen', mapId: '1' }],
+        [{ areaId: 12 }],
+      );
+
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('VERBOSE MODE - Detailed Information'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Supported Clean Modes (3):'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Current Settings:'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('Connection:'));
+    });
+
+    it('prints fallback verbose details when data retrieval fails', async () => {
+      const platform = new MibridgePlatform(matterbridge as any, log as any, makeConfig() as any);
+      mockClient.getInfo.mockRejectedValue(new Error('info fail'));
+      mockClient.getStatus.mockRejectedValue(new Error('status fail'));
+      mockClient.getSupportedCleanModes.mockRejectedValue(new Error('modes fail'));
+      mockClient.getCleanMode.mockRejectedValue(new Error('clean mode fail'));
+      mockClient.getRunMode.mockRejectedValue(new Error('run mode fail'));
+
+      await (platform as any).displayVerboseInfo({ did: 'd2', name: 'Bot 2' }, mockClient, [], [], []);
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Could not retrieve device info'));
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Could not retrieve status'));
+      expect(log.info).toHaveBeenCalledWith('   No maps found. Create a map in Xiaomi Home app first.');
+      expect(log.info).toHaveBeenCalledWith('   No rooms/areas found.');
+      expect(log.info).toHaveBeenCalledWith('Supported Clean Modes:');
+      expect(log.info).toHaveBeenCalledWith('   Default: Vacuum, Mop, Vacuum+Mop');
     });
   });
 });
