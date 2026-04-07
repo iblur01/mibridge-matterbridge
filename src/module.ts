@@ -7,12 +7,14 @@
  */
 import { listDevices, Session } from '@mibridge/core';
 import { MatterbridgeDynamicPlatform, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
-import { AnsiLogger, LogLevel } from 'matterbridge/logger';
 import { BaseDeviceService } from './platform/DeviceService.js';
 import { PlatformContext } from './platform/DeviceAccessory.js';
 import { registry } from './platform/registry.js';
 
-export default function initializePlugin(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: PlatformConfig): MibridgePlatform {
+type PlatformLogger = ConstructorParameters<typeof MatterbridgeDynamicPlatform>[1];
+type PlatformLogLevel = Parameters<MatterbridgeDynamicPlatform['onChangeLoggerLevel']>[0];
+
+export default function initializePlugin(matterbridge: PlatformMatterbridge, log: PlatformLogger, config: PlatformConfig): MibridgePlatform {
   return new MibridgePlatform(matterbridge, log, config);
 }
 
@@ -20,7 +22,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform implements Pla
   private services: BaseDeviceService[] = [];
   verbose = false;
 
-  constructor(matterbridge: PlatformMatterbridge, log: AnsiLogger, config: PlatformConfig) {
+  constructor(matterbridge: PlatformMatterbridge, log: PlatformLogger, config: PlatformConfig) {
     super(matterbridge, log, config);
 
     if (this.verifyMatterbridgeVersion === undefined || typeof this.verifyMatterbridgeVersion !== 'function' || !this.verifyMatterbridgeVersion('3.4.0')) {
@@ -47,7 +49,9 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform implements Pla
     // @mibridge/core requires savedAt on Session, but it is not used for cloud auth
     const session: Session = { ...sessionConfig, savedAt: '2024-01-01T00:00:00.000Z' };
     const region = (this.config.region as string) ?? 'de';
-    const pollInterval = (this.config.pollInterval as number) ?? 5000;
+    const vacuumPollInterval = (this.config.pollInterval as number) ?? 5000;
+    const fountainPollInterval = (this.config.fountainPollInterval as number) ?? 30_000;
+    const fanPollInterval = (this.config.fanPollInterval as number) ?? 10_000;
 
     try {
       this.log.info('Connecting to Xiaomi Cloud...');
@@ -55,7 +59,13 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform implements Pla
       this.log.info(`Found ${allDevices.length} total Xiaomi device(s)`);
 
       for (const entry of registry) {
-        const service = new entry.ServiceClass(this.log, { session, region, pollInterval });
+        const service = new entry.ServiceClass(this.log, {
+          session,
+          region,
+          pollInterval: entry.ServiceClass.name === 'FountainService' ? fountainPollInterval
+                      : entry.ServiceClass.name === 'FanService' ? fanPollInterval
+                      : vacuumPollInterval,
+        });
         try {
           await service.connect(allDevices);
           this.services.push(service);
@@ -84,7 +94,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform implements Pla
     this.log.info('onConfigure called');
   }
 
-  override async onChangeLoggerLevel(logLevel: LogLevel) {
+  override async onChangeLoggerLevel(logLevel: PlatformLogLevel) {
     this.log.info(`onChangeLoggerLevel called with: ${logLevel}`);
   }
 
