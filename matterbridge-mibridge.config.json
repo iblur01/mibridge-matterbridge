@@ -1,6 +1,6 @@
 {
   "name": "matterbridge-mibridge",
-  "type": "AccessoryPlatform",
+  "type": "DynamicPlatform",
   "whiteList": [],
   "blackList": [],
   "debug": false,

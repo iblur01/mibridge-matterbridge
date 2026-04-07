@@ -14,3 +14,7 @@ temp/
 **/*.html
 
 # Package specific directories and files that should be ignored
+npm-shrinkwrap.json
+package-lock.json
+
+docs/

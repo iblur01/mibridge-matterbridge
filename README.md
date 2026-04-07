@@ -44,19 +44,19 @@ This will produce a session with `userId`, `ssecurity`, and `serviceToken` — p
 
 In the Matterbridge frontend, open the plugin settings and fill in:
 
-| Field | Description |
-|-------|-------------|
-| `session.userId` | Your Xiaomi user ID |
-| `session.ssecurity` | Xiaomi `ssecurity` token |
-| `session.serviceToken` | Xiaomi `serviceToken` |
-| `region` | Xiaomi Cloud region (`de`, `cn`, `us`, `sg`, `ru`, `tw`, `in`, `i2`) |
-| `pollInterval` | Status polling interval in ms (default: `5000`) |
-| `verbose` | Enable detailed logs at startup |
+| Field                  | Description                                                          |
+| ---------------------- | -------------------------------------------------------------------- |
+| `session.userId`       | Your Xiaomi user ID                                                  |
+| `session.ssecurity`    | Xiaomi `ssecurity` token                                             |
+| `session.serviceToken` | Xiaomi `serviceToken`                                                |
+| `region`               | Xiaomi Cloud region (`de`, `cn`, `us`, `sg`, `ru`, `tw`, `in`, `i2`) |
+| `pollInterval`         | Status polling interval in ms (default: `5000`)                      |
+| `verbose`              | Enable detailed logs at startup                                      |
 
 ## Supported devices
 
-| Category | Models |
-|----------|--------|
+| Category     | Models                         |
+| ------------ | ------------------------------ |
 | Robot vacuum | Dreame (all MIoT-based models) |
 
 Additional Xiaomi device categories will be added as `@mibridge/core` expands its coverage.
@@ -75,10 +75,10 @@ Error codes from the device are mapped to Matter `VacuumErrorCode` semantics (du
 
 ## Related packages
 
-| Package | Description |
-|---------|-------------|
-| [`@mibridge/core`](https://www.npmjs.com/package/@mibridge/core) | SDK — device control, authentication, Matter-aligned state |
-| [`@mibridge/cli`](https://www.npmjs.com/package/@mibridge/cli) | CLI — terminal interface for devices and session management |
+| Package                                                          | Description                                                 |
+| ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| [`@mibridge/core`](https://www.npmjs.com/package/@mibridge/core) | SDK — device control, authentication, Matter-aligned state  |
+| [`@mibridge/cli`](https://www.npmjs.com/package/@mibridge/cli)   | CLI — terminal interface for devices and session management |
 
 Source: [github.com/iblur01/mibridge](https://github.com/iblur01/mibridge)
 

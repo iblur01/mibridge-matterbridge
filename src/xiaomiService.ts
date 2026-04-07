@@ -6,8 +6,8 @@
  * @license Apache-2.0
  */
 
+import { DeviceInfo, DreameVacuumClient, listDevices, Session } from '@mibridge/core';
 import { AnsiLogger } from 'matterbridge/logger';
-import { DreameVacuumClient, listDevices, Session, DeviceInfo } from '@mibridge/core';
 
 export interface XiaomiServiceConfig {
   session: Session;
@@ -38,12 +38,8 @@ export class XiaomiVacuumService {
       this.devices = await listDevices(this.config.session, this.config.region ?? 'de');
       this.log.info(`Found ${this.devices.length} Xiaomi devices`);
 
-      const vacuums = this.devices.filter((d) => 
-        d.model.includes('dreame') || 
-        d.model.includes('vacuum') || 
-        d.model.includes('roborock')
-      );
-      
+      const vacuums = this.devices.filter((d) => d.model.includes('dreame') || d.model.includes('vacuum') || d.model.includes('roborock'));
+
       this.log.info(`Found ${vacuums.length} vacuum devices: ${vacuums.map((v) => `${v.name} (${v.model})`).join(', ')}`);
 
       for (const device of vacuums) {
@@ -108,11 +104,7 @@ export class XiaomiVacuumService {
   }
 
   getVacuums(): DeviceInfo[] {
-    return this.devices.filter((d) => 
-      d.model.includes('dreame') || 
-      d.model.includes('vacuum') || 
-      d.model.includes('roborock')
-    );
+    return this.devices.filter((d) => d.model.includes('dreame') || d.model.includes('vacuum') || d.model.includes('roborock'));
   }
 
   getClient(did: string): DreameVacuumClient | undefined {
