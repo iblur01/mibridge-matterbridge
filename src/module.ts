@@ -6,7 +6,7 @@
  * @license Apache-2.0
  */
 
-import { MatterbridgeAccessoryPlatform, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
+import { MatterbridgeDynamicPlatform, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { RoboticVacuumCleaner } from 'matterbridge/devices';
 import { AnsiLogger, LogLevel } from 'matterbridge/logger';
 import { XiaomiVacuumService } from './xiaomiService.js';
@@ -16,7 +16,7 @@ export default function initializePlugin(matterbridge: PlatformMatterbridge, log
   return new MibridgePlatform(matterbridge, log, config);
 }
 
-export class MibridgePlatform extends MatterbridgeAccessoryPlatform {
+export class MibridgePlatform extends MatterbridgeDynamicPlatform {
   private xiaomiService: XiaomiVacuumService | null = null;
   private vacuumClients: Map<string, DreameVacuumClient> = new Map();
   private verbose = false;
@@ -137,10 +137,11 @@ export class MibridgePlatform extends MatterbridgeAccessoryPlatform {
         }));
 
         // Create Matterbridge device with areas
+        // Each vacuum uses 'server' mode so Apple Home assigns it its own child bridge
         const vacuum = new RoboticVacuumCleaner(
           device.name,
           device.did,
-          undefined, // deviceType
+          'server', // deviceType: gives each vacuum its own child bridge / QR code in Apple Home
           1, // currentRunMode (Idle)
           undefined, // supportedRunModes (defaults)
           1, // currentCleanMode (Vacuum)
