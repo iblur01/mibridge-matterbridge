@@ -6,9 +6,7 @@
  * @license Apache-2.0
  */
 import type { DeviceInfo, FanClient, FanStatus, FanSpeed } from '@mibridge/core';
-import { MatterbridgeEndpoint } from 'matterbridge';
-// @ts-expect-error fanDevice is not exported in type declarations but is available at runtime
-import { fanDevice } from 'matterbridge';
+import { MatterbridgeEndpoint, fanDevice } from 'matterbridge';
 import { BaseDeviceAccessory, PlatformContext } from '../../platform/DeviceAccessory.js';
 
 // Matter FanControl.FanMode values

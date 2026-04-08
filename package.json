@@ -104,7 +104,6 @@
     "matterbridge:list": "matterbridge -list"
   },
   "dependencies": {
-    "@mibridge/cli": "^1.0.0",
     "@mibridge/core": "^1.0.2",
     "node-ansi-logger": "3.2.0",
     "node-persist-manager": "2.0.1"
