@@ -20,6 +20,7 @@ class MockEndpoint extends EventEmitter {
   createDefaultIdentifyClusterServer = jest.fn().mockReturnValue(this);
   createDefaultBridgedDeviceBasicInformationClusterServer = jest.fn().mockReturnValue(this);
   createDefaultFanControlClusterServer = jest.fn().mockReturnValue(this);
+  createBaseFanControlClusterServer = jest.fn().mockReturnValue(this);
 
   setAttribute = jest.fn((cluster: string, attr: string, value: unknown) => {
     this.attributes.set(`${cluster}.${attr}`, value);
@@ -147,7 +148,7 @@ describe('FanAccessory', () => {
       await accessory.register(platform, deviceInfo as any, client);
 
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
-      expect(endpoint.createDefaultFanControlClusterServer).toHaveBeenCalledWith(0, 0);
+      expect(endpoint.createBaseFanControlClusterServer).toHaveBeenCalledWith(0, 0);
     });
 
     it('subscribes to fanControl.fanMode attribute changes', async () => {

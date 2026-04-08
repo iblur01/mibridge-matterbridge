@@ -35,8 +35,8 @@ export class FanAccessory extends BaseDeviceAccessory {
         'Matterbridge',
         'Matterbridge Fan',
       )
-      // 0 = Off (initial), 0 = OffLowMedHigh sequence
-      .createDefaultFanControlClusterServer(0, 0);
+      // Base cluster (no AUT feature) — 0 = Off, 0 = OffLowMedHigh sequence
+      .createBaseFanControlClusterServer(0, 0);
 
     // Register with Matterbridge
     platform.setSelectDevice(did, device.name);
