@@ -104,11 +104,12 @@
       "maximum": 300000
     },
     "fanPollInterval": {
-      "title": "Fan Poll Interval",
+      "title": "Fan Poll Interval (ms)",
       "description": "How often (in milliseconds) to poll fan devices for status updates. Default: 10000 (10 seconds).",
-      "type": "integer",
+      "type": "number",
       "default": 10000,
-      "minimum": 5000
+      "minimum": 5000,
+      "maximum": 300000
     }
   }
 }
