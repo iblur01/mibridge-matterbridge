@@ -1,26 +1,20 @@
 /**
- * Tests for FanAccessory
+ * Tests for FanAccessory (percent + oscillation)
  *
  * @file devices/fan/FanAccessory.test.ts
  */
 import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-// ─── Local FanMode/FanSpeed constants (mirror types.ts) ──────────────────────
-
-const FanMode = { Straight: 'straight', Sleep: 'sleep' } as const;
-
 // ─── Mock Endpoint ────────────────────────────────────────────────────────────
 
 class MockEndpoint extends EventEmitter {
   private attributes: Map<string, unknown> = new Map();
-  private commandHandlers: Map<string, (...args: unknown[]) => Promise<void>> = new Map();
   private attributeListeners: Map<string, (newValue: unknown, oldValue: unknown, context: { offline?: boolean }) => void> = new Map();
 
   createDefaultIdentifyClusterServer = jest.fn().mockReturnValue(this);
   createDefaultBridgedDeviceBasicInformationClusterServer = jest.fn().mockReturnValue(this);
-  createDefaultFanControlClusterServer = jest.fn().mockReturnValue(this);
-  createBaseFanControlClusterServer = jest.fn().mockReturnValue(this);
+  createCompleteFanControlClusterServer = jest.fn().mockReturnValue(this);
 
   setAttribute = jest.fn((cluster: string, attr: string, value: unknown) => {
     this.attributes.set(`${cluster}.${attr}`, value);
@@ -30,9 +24,7 @@ class MockEndpoint extends EventEmitter {
     return this.attributes.get(`${cluster}.${attr}`);
   }
 
-  addCommandHandler = jest.fn((name: string, handler: (...args: unknown[]) => Promise<void>) => {
-    this.commandHandlers.set(name, handler);
-  });
+  addCommandHandler = jest.fn();
 
   subscribeAttribute = jest.fn(
     async (
@@ -67,9 +59,7 @@ jest.unstable_mockModule('matterbridge', () => ({
   fanDevice: { name: 'MA-fan', code: 0x2b },
 }));
 
-jest.unstable_mockModule('@mibridge/core', () => ({
-  FanMode,
-}));
+jest.unstable_mockModule('@mibridge/core', () => ({}));
 
 // Dynamic imports after mocks
 const { FanAccessory } = await import('./FanAccessory.js');
@@ -101,7 +91,6 @@ function _makeFanClientBase() {
     getStatus: jest.fn().mockResolvedValue({
       on: true,
       speed: { type: 'level', value: 2 },
-      mode: FanMode.Straight,
       oscillating: false,
       timerMinutes: 0,
       buzzer: false,
@@ -110,6 +99,7 @@ function _makeFanClientBase() {
     }),
     setOn: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     setSpeed: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    setOscillating: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
   });
 }
 
@@ -140,7 +130,7 @@ describe('FanAccessory', () => {
       );
     });
 
-    it('creates FanControl cluster server with Off mode and OffLowMedHigh sequence', async () => {
+    it('creates FanControl cluster with percent and rock support', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
@@ -148,10 +138,20 @@ describe('FanAccessory', () => {
       await accessory.register(platform, deviceInfo as any, client);
 
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
-      expect(endpoint.createBaseFanControlClusterServer).toHaveBeenCalledWith(0, 0);
+      expect(endpoint.createCompleteFanControlClusterServer).toHaveBeenCalledWith(
+        0,    // fanMode Off
+        0,    // fanModeSequence OffLowMedHigh
+        0,    // percentSetting
+        0,    // percentCurrent
+        undefined,
+        undefined,
+        undefined,
+        expect.objectContaining({ rockLeftRight: true }),   // rockSupport
+        expect.objectContaining({ rockLeftRight: false }),  // rockSetting (initial off)
+      );
     });
 
-    it('subscribes to fanControl.fanMode attribute changes', async () => {
+    it('subscribes to percentSetting attribute changes', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
@@ -161,7 +161,23 @@ describe('FanAccessory', () => {
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
       expect(endpoint.subscribeAttribute).toHaveBeenCalledWith(
         'fanControl',
-        'fanMode',
+        'percentSetting',
+        expect.any(Function),
+        expect.anything(),
+      );
+    });
+
+    it('subscribes to rockSetting attribute changes', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      const platform = makePlatform();
+
+      await accessory.register(platform, deviceInfo as any, client);
+
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      expect(endpoint.subscribeAttribute).toHaveBeenCalledWith(
+        'fanControl',
+        'rockSetting',
         expect.any(Function),
         expect.anything(),
       );
@@ -192,30 +208,29 @@ describe('FanAccessory', () => {
     });
   });
 
-  describe('syncState: FanStatus → fanMode', () => {
-    it('maps on=true, speed level 2 → fanMode Medium (2)', async () => {
+  describe('syncState: FanStatus → Matter attributes', () => {
+    it('maps on=true, speed level 2 → fanMode Medium, percentSetting 50, percentCurrent 50, rockSetting off', async () => {
       const accessory = new FanAccessory(log as any, false);
-      const client = makeFanClient(); // default: on=true, speed level 2
+      const client = makeFanClient(); // default: on=true, speed level 2, oscillating=false
       const platform = makePlatform();
 
       await accessory.register(platform, deviceInfo as any, client);
 
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(2); // Medium
+      expect(endpoint.getAttribute('fanControl', 'percentSetting')).toBe(50);
+      expect(endpoint.getAttribute('fanControl', 'percentCurrent')).toBe(50);
+      expect(endpoint.getAttribute('fanControl', 'rockSetting')).toEqual({ rockLeftRight: false, rockUpDown: false, rockRound: false });
     });
 
-    it('maps on=true, speed level 1 → fanMode Low (1)', async () => {
+    it('maps on=true, speed level 1 → fanMode Low, percent 25', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       client.getStatus.mockResolvedValue({
         on: true,
         speed: { type: 'level', value: 1 },
-        mode: FanMode.Straight,
         oscillating: false,
-        timerMinutes: 0,
-        buzzer: false,
-        led: true,
-        locked: false,
+        timerMinutes: 0, buzzer: false, led: true, locked: false,
       });
       const platform = makePlatform();
 
@@ -223,20 +238,18 @@ describe('FanAccessory', () => {
 
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(1); // Low
+      expect(endpoint.getAttribute('fanControl', 'percentSetting')).toBe(25);
+      expect(endpoint.getAttribute('fanControl', 'percentCurrent')).toBe(25);
     });
 
-    it('maps on=true, speed level 3 → fanMode High (3)', async () => {
+    it('maps on=true, speed level 3 → fanMode High, percent 75', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       client.getStatus.mockResolvedValue({
         on: true,
         speed: { type: 'level', value: 3 },
-        mode: FanMode.Straight,
         oscillating: false,
-        timerMinutes: 0,
-        buzzer: false,
-        led: true,
-        locked: false,
+        timerMinutes: 0, buzzer: false, led: true, locked: false,
       });
       const platform = makePlatform();
 
@@ -244,20 +257,18 @@ describe('FanAccessory', () => {
 
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(3); // High
+      expect(endpoint.getAttribute('fanControl', 'percentSetting')).toBe(75);
+      expect(endpoint.getAttribute('fanControl', 'percentCurrent')).toBe(75);
     });
 
-    it('maps on=false → fanMode Off (0)', async () => {
+    it('maps on=false → fanMode Off, percent 0', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       client.getStatus.mockResolvedValue({
         on: false,
         speed: { type: 'level', value: 1 },
-        mode: FanMode.Straight,
         oscillating: false,
-        timerMinutes: 0,
-        buzzer: false,
-        led: true,
-        locked: false,
+        timerMinutes: 0, buzzer: false, led: true, locked: false,
       });
       const platform = makePlatform();
 
@@ -265,11 +276,30 @@ describe('FanAccessory', () => {
 
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(0); // Off
+      expect(endpoint.getAttribute('fanControl', 'percentSetting')).toBe(0);
+      expect(endpoint.getAttribute('fanControl', 'percentCurrent')).toBe(0);
+    });
+
+    it('maps oscillating=true → rockSetting.rockLeftRight true', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      client.getStatus.mockResolvedValue({
+        on: true,
+        speed: { type: 'level', value: 2 },
+        oscillating: true,
+        timerMinutes: 0, buzzer: false, led: true, locked: false,
+      });
+      const platform = makePlatform();
+
+      await accessory.register(platform, deviceInfo as any, client);
+
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      expect(endpoint.getAttribute('fanControl', 'rockSetting')).toEqual({ rockLeftRight: true, rockUpDown: false, rockRound: false });
     });
   });
 
   describe('statusChange event', () => {
-    it('updates fanMode when status changes', async () => {
+    it('updates all four attributes when status changes to off', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
@@ -279,18 +309,17 @@ describe('FanAccessory', () => {
       client.emit('statusChange', {
         on: false,
         speed: { type: 'level', value: 1 },
-        mode: FanMode.Straight,
         oscillating: false,
-        timerMinutes: 0,
-        buzzer: false,
-        led: true,
-        locked: false,
+        timerMinutes: 0, buzzer: false, led: true, locked: false,
       });
 
-      expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(0); // Off
+      expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(0);
+      expect(endpoint.getAttribute('fanControl', 'percentSetting')).toBe(0);
+      expect(endpoint.getAttribute('fanControl', 'percentCurrent')).toBe(0);
+      expect(endpoint.getAttribute('fanControl', 'rockSetting')).toEqual({ rockLeftRight: false, rockUpDown: false, rockRound: false });
     });
 
-    it('updates fanMode to High when speed changes to level 3', async () => {
+    it('updates fanMode to High and percent 75 when speed changes to level 3', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
@@ -300,94 +329,173 @@ describe('FanAccessory', () => {
       client.emit('statusChange', {
         on: true,
         speed: { type: 'level', value: 3 },
-        mode: FanMode.Straight,
         oscillating: false,
-        timerMinutes: 0,
-        buzzer: false,
-        led: true,
-        locked: false,
+        timerMinutes: 0, buzzer: false, led: true, locked: false,
       });
 
-      expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(3); // High
+      expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(3);
+      expect(endpoint.getAttribute('fanControl', 'percentSetting')).toBe(75);
+      expect(endpoint.getAttribute('fanControl', 'percentCurrent')).toBe(75);
     });
-  });
 
-  describe('fanMode attribute changes (Apple Home → fan)', () => {
-    it('fanMode Off (0) → calls setOn(false)', async () => {
+    it('updates rockSetting when oscillating changes', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 0, 2);
+      client.emit('statusChange', {
+        on: true,
+        speed: { type: 'level', value: 2 },
+        oscillating: true,
+        timerMinutes: 0, buzzer: false, led: true, locked: false,
+      });
+
+      expect(endpoint.getAttribute('fanControl', 'rockSetting')).toEqual({ rockLeftRight: true, rockUpDown: false, rockRound: false });
+    });
+  });
+
+  describe('percentSetting attribute changes (Apple Home → fan)', () => {
+    it('percentSetting 0 → calls setOn(false)', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 0, 50);
 
       expect(client.setOn).toHaveBeenCalledWith(false);
       expect(client.setSpeed).not.toHaveBeenCalled();
     });
 
-    it('fanMode Low (1) → calls setOn(true) + setSpeed level 1', async () => {
+    it('percentSetting 1 (low boundary) → setOn(true) + setSpeed level 1', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 1, 0);
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 1, 0);
 
       expect(client.setOn).toHaveBeenCalledWith(true);
       expect(client.setSpeed).toHaveBeenCalledWith({ type: 'level', value: 1 });
     });
 
-    it('fanMode Medium (2) → calls setOn(true) + setSpeed level 2', async () => {
+    it('percentSetting 33 (low top) → setOn(true) + setSpeed level 1', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 2, 0);
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 33, 0);
+
+      expect(client.setOn).toHaveBeenCalledWith(true);
+      expect(client.setSpeed).toHaveBeenCalledWith({ type: 'level', value: 1 });
+    });
+
+    it('percentSetting 34 (medium bottom) → setOn(true) + setSpeed level 2', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 34, 0);
 
       expect(client.setOn).toHaveBeenCalledWith(true);
       expect(client.setSpeed).toHaveBeenCalledWith({ type: 'level', value: 2 });
     });
 
-    it('fanMode High (3) → calls setOn(true) + setSpeed level 3', async () => {
+    it('percentSetting 66 (medium top) → setOn(true) + setSpeed level 2', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 3, 0);
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 66, 0);
+
+      expect(client.setOn).toHaveBeenCalledWith(true);
+      expect(client.setSpeed).toHaveBeenCalledWith({ type: 'level', value: 2 });
+    });
+
+    it('percentSetting 67 (high bottom) → setOn(true) + setSpeed level 3', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 67, 0);
 
       expect(client.setOn).toHaveBeenCalledWith(true);
       expect(client.setSpeed).toHaveBeenCalledWith({ type: 'level', value: 3 });
     });
 
-    it('fanMode On (4) → calls setOn(true) only', async () => {
+    it('percentSetting 100 (max) → setOn(true) + setSpeed level 3', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 4, 0);
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 100, 0);
 
       expect(client.setOn).toHaveBeenCalledWith(true);
-      expect(client.setSpeed).not.toHaveBeenCalled();
+      expect(client.setSpeed).toHaveBeenCalledWith({ type: 'level', value: 3 });
     });
 
-    it('ignores offline attribute changes', async () => {
+    it('ignores offline percentSetting changes', async () => {
       const accessory = new FanAccessory(log as any, false);
       const client = makeFanClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
       const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
 
-      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 0, 2, { offline: true });
+      await endpoint.triggerAttributeChange('fanControl', 'percentSetting', 0, 50, { offline: true });
 
       expect(client.setOn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('rockSetting attribute changes (Apple Home → fan)', () => {
+    it('rockSetting.rockLeftRight true → calls setOscillating(true)', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+
+      await endpoint.triggerAttributeChange('fanControl', 'rockSetting', { rockLeftRight: true, rockUpDown: false, rockRound: false }, undefined);
+
+      expect(client.setOscillating).toHaveBeenCalledWith(true);
+    });
+
+    it('rockSetting.rockLeftRight false → calls setOscillating(false)', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+
+      await endpoint.triggerAttributeChange('fanControl', 'rockSetting', { rockLeftRight: false, rockUpDown: false, rockRound: false }, undefined);
+
+      expect(client.setOscillating).toHaveBeenCalledWith(false);
+    });
+
+    it('ignores offline rockSetting changes', async () => {
+      const accessory = new FanAccessory(log as any, false);
+      const client = makeFanClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+
+      await endpoint.triggerAttributeChange('fanControl', 'rockSetting', { rockLeftRight: true, rockUpDown: false, rockRound: false }, undefined, { offline: true });
+
+      expect(client.setOscillating).not.toHaveBeenCalled();
     });
   });
 });
