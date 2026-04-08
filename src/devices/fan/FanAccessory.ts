@@ -134,7 +134,7 @@ export class FanAccessory extends BaseDeviceAccessory {
   private syncState(endpoint: MatterbridgeEndpoint, status: FanStatus): void {
     const percent = this.statusToPercent(status);
     const fanMode = this.statusToFanMode(status);
-    const rockSetting: RockSetting = { rockLeftRight: status.oscillating, rockUpDown: false, rockRound: false };
+    const rockSetting: RockSetting = { ...ROCK_OFF, rockLeftRight: status.oscillating };
 
     endpoint.setAttribute('fanControl', 'fanMode', fanMode);
     endpoint.setAttribute('fanControl', 'percentSetting', percent);
