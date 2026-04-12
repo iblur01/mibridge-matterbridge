@@ -40,6 +40,11 @@ declare module 'matterbridge' {
     verifyMatterbridgeVersion(requiredVersion: string, destroy?: boolean): boolean;
   }
 
+  export class MatterbridgeFanControlServer {
+    constructor(...args: unknown[]);
+    [key: string]: any;
+  }
+
   export const powerSource: unknown;
   export const waterValve: unknown;
   export const airPurifier: unknown;
