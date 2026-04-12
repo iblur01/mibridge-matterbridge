@@ -95,3 +95,14 @@ function checkPrereqs() {
 
 console.log(`\n${C.bold}🚀 Starting CI pipeline...${C.reset}${IS_RELEASE ? ` ${C.yellow}[release mode]${C.reset}` : ''}\n`);
 checkPrereqs();
+
+// ── CI steps ─────────────────────────────────────────────────────────────────
+
+step('Clean build',        'npm run cleanBuild');
+step('Lint',               'npm run lint');
+step('Format check',       'npm run format:check');
+step('Typecheck',          'npm run test:typecheck');
+step('Tests + coverage',   'npm run test:coverage');
+step('Production build',   'npm run buildProduction');
+
+console.log(`\n${C.green}${C.bold}🎉 CI passed!${C.reset}\n`);
