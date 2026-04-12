@@ -62,3 +62,36 @@ function readPkg() {
 function writePkg(pkg) {
   writeFileSync(resolve(ROOT, 'package.json'), JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 }
+
+// ── Prerequisite checks ──────────────────────────────────────────────────────
+
+function checkPrereqs() {
+  // 1. No uncommitted changes
+  const status = git('status --porcelain');
+  if (status) {
+    console.error(`${C.red}✗ Uncommitted changes detected. Please commit or stash first.${C.reset}`);
+    console.error(status);
+    process.exit(1);
+  }
+
+  // 2. On main branch (release mode only)
+  if (IS_RELEASE) {
+    const branch = git('rev-parse --abbrev-ref HEAD');
+    if (branch !== 'main') {
+      console.error(`${C.red}✗ Release requires branch 'main', currently on '${branch}'.${C.reset}`);
+      process.exit(1);
+    }
+
+    // 3. NPM_TOKEN must be set
+    if (!process.env.NPM_TOKEN) {
+      console.error(`${C.red}✗ NPM_TOKEN environment variable is not set.${C.reset}`);
+      console.error(`  Export it with: export NPM_TOKEN=your_token`);
+      process.exit(1);
+    }
+  }
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+
+console.log(`\n${C.bold}🚀 Starting CI pipeline...${C.reset}${IS_RELEASE ? ` ${C.yellow}[release mode]${C.reset}` : ''}\n`);
+checkPrereqs();
