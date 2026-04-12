@@ -25,8 +25,6 @@ jest.unstable_mockModule('matterbridge/devices', () => ({
   RoboticVacuumCleaner: MockRoboticVacuumCleaner,
 }));
 
-jest.unstable_mockModule('matterbridge/logger', () => ({ AnsiLogger: jest.fn() }));
-
 jest.unstable_mockModule('@mibridge/core', () => ({
   VacuumState, VacuumErrorCode, CleanMode,
 }));

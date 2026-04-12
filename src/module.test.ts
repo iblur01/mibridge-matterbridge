@@ -65,11 +65,6 @@ jest.unstable_mockModule('matterbridge', () => ({
   MatterbridgeDynamicPlatform: MockMatterbridgeDynamicPlatform,
 }));
 
-jest.unstable_mockModule('matterbridge/logger', () => ({
-  AnsiLogger: jest.fn(),
-  LogLevel,
-}));
-
 // Dynamic imports after mocks
 const moduleExports = await import('./module.js');
 const MibridgePlatform = moduleExports.MibridgePlatform;

@@ -6,7 +6,7 @@
  * @license Apache-2.0
  */
 import type { DeviceInfo, FanClient, FanStatus, FanSpeed } from '@mibridge/core';
-import { MatterbridgeEndpoint, fanDevice } from 'matterbridge';
+import { MatterbridgeEndpoint, MatterbridgeFanControlServer, fanDevice } from 'matterbridge';
 import { BaseDeviceAccessory, PlatformContext } from '../../platform/DeviceAccessory.js';
 
 // Matter FanControl.FanMode values
@@ -36,6 +36,14 @@ export class FanAccessory extends BaseDeviceAccessory {
       { id: `${device.name.replaceAll(' ', '')}-${did}` },
     );
 
+    // Get base FanControlServer (without Auto/Step) via prototype chain from MatterbridgeFanControlServer.
+    // MatterbridgeFanControlServer extends FanControlServer.with(Auto, Step),
+    // so two levels up gives us the original FanControlServer from matter.js.
+    // We then add only Rocking (RCK) — no Auto (AUT) — to avoid the fanModeSequence conformance error.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const FanControlServer = Object.getPrototypeOf(Object.getPrototypeOf(MatterbridgeFanControlServer)) as any;
+    const RockingFanControlServer = FanControlServer.with('Rocking') as typeof MatterbridgeFanControlServer;
+
     endpoint
       .createDefaultIdentifyClusterServer()
       .createDefaultBridgedDeviceBasicInformationClusterServer(
@@ -44,19 +52,18 @@ export class FanAccessory extends BaseDeviceAccessory {
         0xfff1,
         'Matterbridge',
         'Matterbridge Fan',
-      )
-      // Complete cluster: percent speed + RCK (rock/oscillation), no AUT
-      .createCompleteFanControlClusterServer(
-        0,         // fanMode: Off
-        0,         // fanModeSequence: OffLowMedHigh
-        0,         // percentSetting: 0%
-        0,         // percentCurrent: 0%
-        undefined,
-        undefined,
-        undefined,
-        { rockLeftRight: true, rockUpDown: false, rockRound: false },  // rockSupport
-        { ...ROCK_OFF },                                                // rockSetting (initial)
       );
+
+    // SPD + RCK cluster: percent speed + rock/oscillation, without Auto (AUT).
+    // fanModeSequence=0 (OffLowMedHigh) is only valid when AUT is absent — correct here.
+    endpoint.behaviors.require(RockingFanControlServer, {
+      fanMode: 0,
+      fanModeSequence: 0,
+      percentSetting: 0,
+      percentCurrent: 0,
+      rockSupport: { rockLeftRight: true, rockUpDown: false, rockRound: false },
+      rockSetting: { ...ROCK_OFF },
+    });
 
     // Register with Matterbridge
     platform.setSelectDevice(did, device.name);

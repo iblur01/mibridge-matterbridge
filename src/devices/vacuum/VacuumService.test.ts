@@ -14,10 +14,6 @@ jest.unstable_mockModule('@mibridge/core', () => ({
   DreameVacuumClient: mockDreameVacuumClient,
 }));
 
-jest.unstable_mockModule('matterbridge/logger', () => ({
-  AnsiLogger: jest.fn(),
-}));
-
 // Dynamic imports after mock registrations
 const { VacuumService } = await import('./VacuumService.js');
 

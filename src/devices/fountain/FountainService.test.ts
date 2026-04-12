@@ -14,10 +14,6 @@ jest.unstable_mockModule('@mibridge/core', () => ({
   PetFountainClient: mockPetFountainClient,
 }));
 
-jest.unstable_mockModule('matterbridge/logger', () => ({
-  AnsiLogger: jest.fn(),
-}));
-
 // Dynamic imports after mock registrations
 const { FountainService } = await import('./FountainService.js');
 

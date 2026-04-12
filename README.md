@@ -51,13 +51,15 @@ In the Matterbridge frontend, open the plugin settings and fill in:
 | `session.serviceToken` | Xiaomi `serviceToken`                                                |
 | `region`               | Xiaomi Cloud region (`de`, `cn`, `us`, `sg`, `ru`, `tw`, `in`, `i2`) |
 | `pollInterval`         | Status polling interval in ms (default: `5000`)                      |
+| `fountainPollInterval` | Pet fountain polling interval in ms (default: `30000`)               |
 | `verbose`              | Enable detailed logs at startup                                      |
 
 ## Supported devices
 
-| Category     | Models                         |
-| ------------ | ------------------------------ |
+| Category | Models |
+| --- | --- |
 | Robot vacuum | Dreame (all MIoT-based models) |
+| Pet fountain | Xiaomi Pet Waterer (`pet_waterer`) |
 
 Additional Xiaomi device categories will be added as `@mibridge/core` expands its coverage.
 

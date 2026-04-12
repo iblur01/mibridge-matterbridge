@@ -6,11 +6,11 @@
  */
 import type { DeviceInfo } from '@mibridge/core';
 import type { MatterbridgeEndpoint } from 'matterbridge';
-import type { AnsiLogger } from 'matterbridge/logger';
+import type { XiaomiLogger } from './DeviceService.js';
 
 /** Minimal platform surface needed by accessories — avoids circular imports. */
 export interface PlatformContext {
-  log: AnsiLogger;
+  log: XiaomiLogger;
   verbose: boolean;
   setSelectDevice(did: string, name: string): void;
   validateDevice(args: string[]): boolean;
@@ -18,10 +18,10 @@ export interface PlatformContext {
 }
 
 export abstract class BaseDeviceAccessory {
-  protected log: AnsiLogger;
+  protected log: XiaomiLogger;
   protected verbose: boolean;
 
-  constructor(log: AnsiLogger, verbose: boolean) {
+  constructor(log: XiaomiLogger, verbose: boolean) {
     this.log = log;
     this.verbose = verbose;
   }

@@ -5,7 +5,13 @@
  * @file platform/DeviceService.ts
  */
 import type { DeviceInfo, Session } from '@mibridge/core';
-import type { AnsiLogger } from 'matterbridge/logger';
+
+export interface XiaomiLogger {
+  debug(message: string): void;
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string): void;
+}
 
 export interface XiaomiServiceConfig {
   session: Session;
@@ -14,10 +20,10 @@ export interface XiaomiServiceConfig {
 }
 
 export abstract class BaseDeviceService {
-  protected log: AnsiLogger;
+  protected log: XiaomiLogger;
   protected config: XiaomiServiceConfig;
 
-  constructor(log: AnsiLogger, config: XiaomiServiceConfig) {
+  constructor(log: XiaomiLogger, config: XiaomiServiceConfig) {
     this.log = log;
     this.config = config;
   }

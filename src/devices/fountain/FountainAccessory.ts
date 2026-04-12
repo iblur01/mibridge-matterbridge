@@ -5,14 +5,15 @@
  * @file devices/fountain/FountainAccessory.ts
  * @license Apache-2.0
  */
-import { FountainFaultCode, FountainStatus } from '@mibridge/core';
+import { FountainFaultCode, FountainMode, FountainStatus } from '@mibridge/core';
 import type { DeviceInfo, PetFountainClient } from '@mibridge/core';
-import { MatterbridgeEndpoint, powerSource, waterValve } from 'matterbridge';
+import { MatterbridgeEndpoint, airPurifier, powerSource } from 'matterbridge';
 import { BaseDeviceAccessory, PlatformContext } from '../../platform/DeviceAccessory.js';
 
-export class FountainAccessory extends BaseDeviceAccessory {
-  private currentMode: string | null = null;
+// FanMode values from Matter FanControl cluster
+const FanMode = { Off: 0, Low: 1, Medium: 2, High: 3, On: 4, Auto: 5 } as const;
 
+export class FountainAccessory extends BaseDeviceAccessory {
   async register(
     platform: PlatformContext,
     device: DeviceInfo,
@@ -22,42 +23,23 @@ export class FountainAccessory extends BaseDeviceAccessory {
     const did = device.did;
 
     const endpoint = new MatterbridgeEndpoint(
-      [waterValve, powerSource],
-      { id: `${device.name.replaceAll(' ', '')}-${did}`, mode: 'server' },
+      [airPurifier, powerSource],
+      { id: `${device.name.replaceAll(' ', '')}-${did}` },
     );
 
     endpoint
       .createDefaultIdentifyClusterServer()
-      .createDefaultBasicInformationClusterServer(device.name, did, 0xfff1, 'Matterbridge', 0x8000, 'Matterbridge Pet Fountain')
+      .createDefaultBridgedDeviceBasicInformationClusterServer(
+        device.name,
+        did,
+        0xfff1,
+        'Matterbridge',
+        'Matterbridge Pet Fountain',
+      )
       .createDefaultPowerSourceRechargeableBatteryClusterServer(200)
-      .createDefaultValveConfigurationAndControlClusterServer()
+      .createDefaultFanControlClusterServer()
       .createDefaultActivatedCarbonFilterMonitoringClusterServer(100, 0)
       .createDefaultBooleanStateClusterServer(false);
-
-    // Sync initial state
-    const initialStatus = await fountainClient.getStatus();
-    this.syncState(endpoint, initialStatus, did);
-
-    // Commands: Apple Home valve open/close → pump on/off
-    endpoint.addCommandHandler('ValveConfigurationAndControl.open', async () => {
-      this.log.info(`[${did}] open command received`);
-      try {
-        await fountainClient.setOn(true);
-      } catch (err) {
-        this.log.error(`[${did}] Failed to turn on fountain: ${err}`);
-        throw err;
-      }
-    });
-
-    endpoint.addCommandHandler('ValveConfigurationAndControl.close', async () => {
-      this.log.info(`[${did}] close command received`);
-      try {
-        await fountainClient.setOn(false);
-      } catch (err) {
-        this.log.error(`[${did}] Failed to turn off fountain: ${err}`);
-        throw err;
-      }
-    });
 
     // Command: filter reset (ActivatedCarbonFilterMonitoring.ResetCondition)
     endpoint.addCommandHandler('resetCondition', async () => {
@@ -105,16 +87,37 @@ export class FountainAccessory extends BaseDeviceAccessory {
     await platform.registerDevice(endpoint);
     this.log.info(`Registered fountain: ${device.name} (${did})`);
 
+    // Subscribe and sync after endpoint is active
+    await endpoint.subscribeAttribute(
+      'fanControl',
+      'fanMode',
+      async (newValue: number, _oldValue: number, context: { offline?: boolean }) => {
+        if (context.offline === true) return;
+        this.log.info(`[${did}] fanMode changed to ${newValue}`);
+        try {
+          if (newValue === FanMode.Off) {
+            await fountainClient.setOn(false);
+          } else {
+            await fountainClient.setOn(true);
+            const mode = this.fanModeToFountainMode(newValue);
+            if (mode) await fountainClient.setMode(mode);
+          }
+        } catch (err) {
+          this.log.error(`[${did}] Failed to apply fanMode ${newValue}: ${err}`);
+        }
+      },
+      this.log,
+    );
+
+    const initialStatus = await fountainClient.getStatus();
+    this.syncState(endpoint, initialStatus, did);
+
     return endpoint;
   }
 
   private syncState(endpoint: MatterbridgeEndpoint, status: FountainStatus, did: string): void {
-    this.currentMode = status.mode;
-
-    // Valve state: 1 = Open (pump on), 0 = Closed (pump off)
-    const valveState = status.on ? 1 : 0;
-    endpoint.setAttribute('valveConfigurationAndControl', 'currentState', valveState);
-    endpoint.setAttribute('valveConfigurationAndControl', 'targetState', valveState);
+    // Fan mode: Off when pump off, otherwise map fountain mode to FanMode
+    endpoint.setAttribute('fanControl', 'fanMode', this.fountainModeToFanMode(status.on, status.mode));
 
     // Battery: Matter scale is 0-200 representing 0-100%
     endpoint.setAttribute('powerSource', 'batPercentRemaining', Math.floor(status.batteryLevel * 2));
@@ -134,6 +137,20 @@ export class FountainAccessory extends BaseDeviceAccessory {
     if (status.fault === FountainFaultCode.PumpBlocked) {
       this.log.warn(`[${did}] Pump blocked — check fountain for obstruction`);
     }
+  }
+
+  private fountainModeToFanMode(on: boolean, mode: string): number {
+    if (!on) return FanMode.Off;
+    if (mode === 'intermittent') return FanMode.Low;
+    if (mode === 'sensor') return FanMode.Auto;
+    return FanMode.High; // continuous or unknown → High
+  }
+
+  private fanModeToFountainMode(fanMode: number): FountainMode | null {
+    if (fanMode === FanMode.Low) return FountainMode.Intermittent;
+    if (fanMode === FanMode.Auto) return FountainMode.Sensor;
+    if (fanMode === FanMode.Medium || fanMode === FanMode.High || fanMode === FanMode.On) return FountainMode.Continuous;
+    return null;
   }
 
   /**
