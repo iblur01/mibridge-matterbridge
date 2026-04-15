@@ -101,10 +101,11 @@
     "matterbridge:remove": "matterbridge -remove .",
     "matterbridge:enable": "matterbridge -enable .",
     "matterbridge:disable": "matterbridge -disable .",
-    "matterbridge:list": "matterbridge -list"
+    "matterbridge:list": "matterbridge -list",
+    "release:ci": "node scripts/release.mjs"
   },
   "dependencies": {
-    "@mibridge/core": "latest",
+    "@mibridge/core": "^1.0.2",
     "node-ansi-logger": "3.2.0",
     "node-persist-manager": "2.0.1"
   },
