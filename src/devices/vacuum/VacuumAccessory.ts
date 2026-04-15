@@ -5,24 +5,13 @@
  * @file devices/vacuum/VacuumAccessory.ts
  * @license Apache-2.0
  */
-import {
-  Area,
-  CleanMode,
-  DeviceInfo,
-  DreameVacuumClient,
-  VacuumErrorCode,
-  VacuumMap,
-  VacuumState,
-} from '@mibridge/core';
+import { Area, CleanMode, DeviceInfo, DreameVacuumClient, VacuumErrorCode, VacuumMap, VacuumState } from '@mibridge/core';
 import { RoboticVacuumCleaner } from 'matterbridge/devices';
+
 import { BaseDeviceAccessory, PlatformContext } from '../../platform/DeviceAccessory.js';
 
 export class VacuumAccessory extends BaseDeviceAccessory {
-  async register(
-    platform: PlatformContext,
-    device: DeviceInfo,
-    client: unknown,
-  ): Promise<RoboticVacuumCleaner | null> {
+  async register(platform: PlatformContext, device: DeviceInfo, client: unknown): Promise<RoboticVacuumCleaner | null> {
     const vacuumClient = client as DreameVacuumClient;
     const did = device.did;
 
@@ -36,20 +25,20 @@ export class VacuumAccessory extends BaseDeviceAccessory {
     const supportedAreas = areas.map((area: Area, index: number) => {
       const areaIdParsed = parseInt(area.id, 10);
       return {
-      areaId: isNaN(areaIdParsed) ? index + 1 : areaIdParsed,
-      mapId: area.mapId ? parseInt(area.mapId, 10) : null,
-      areaInfo: {
-        locationInfo: { locationName: area.name, floorNumber: null, areaType: null },
-        landmarkInfo: null,
-      },
+        areaId: isNaN(areaIdParsed) ? index + 1 : areaIdParsed,
+        mapId: area.mapId ? parseInt(area.mapId, 10) : null,
+        areaInfo: {
+          locationInfo: { locationName: area.name, floorNumber: null, areaType: null },
+          landmarkInfo: null,
+        },
       };
     });
 
     const supportedMaps = maps.map((map: VacuumMap) => {
       const mapIdParsed = parseInt(map.id, 10);
       return {
-      mapId: isNaN(mapIdParsed) ? 1 : mapIdParsed,
-      name: map.name,
+        mapId: isNaN(mapIdParsed) ? 1 : mapIdParsed,
+        name: map.name,
       };
     });
 
@@ -57,9 +46,9 @@ export class VacuumAccessory extends BaseDeviceAccessory {
       device.name,
       did,
       'server',
-      1,   // currentRunMode (Idle)
+      1, // currentRunMode (Idle)
       undefined,
-      1,   // currentCleanMode (Vacuum)
+      1, // currentCleanMode (Vacuum)
       undefined,
       null,
       null,
@@ -99,23 +88,43 @@ export class VacuumAccessory extends BaseDeviceAccessory {
   private setupCommandHandlers(vacuum: RoboticVacuumCleaner, client: DreameVacuumClient, did: string): void {
     vacuum.addCommandHandler('RvcOperationalState.goHome', async () => {
       this.log.info(`[${did}] goHome command received`);
-      try { await client.returnToDock(); } catch (err) { this.log.error(`[${did}] goHome failed: ${err}`); throw err; }
+      try {
+        await client.returnToDock();
+      } catch (err) {
+        this.log.error(`[${did}] goHome failed: ${err}`);
+        throw err;
+      }
     });
 
     vacuum.addCommandHandler('RvcOperationalState.resume', async () => {
       this.log.info(`[${did}] resume command received`);
-      try { await client.resume(); } catch (err) { this.log.error(`[${did}] resume failed: ${err}`); throw err; }
+      try {
+        await client.resume();
+      } catch (err) {
+        this.log.error(`[${did}] resume failed: ${err}`);
+        throw err;
+      }
     });
 
     vacuum.addCommandHandler('RvcOperationalState.pause', async () => {
       this.log.info(`[${did}] pause command received`);
-      try { await client.pause(); } catch (err) { this.log.error(`[${did}] pause failed: ${err}`); throw err; }
+      try {
+        await client.pause();
+      } catch (err) {
+        this.log.error(`[${did}] pause failed: ${err}`);
+        throw err;
+      }
     });
 
     vacuum.addCommandHandler('ServiceArea.selectAreas', async ({ request }: { request: { newAreas?: number[] } }) => {
       const areaIds = request.newAreas?.map((a) => String(a)) || [];
       this.log.info(`[${did}] selectAreas: ${JSON.stringify(areaIds)}`);
-      try { await client.selectAreas(areaIds); } catch (err) { this.log.error(`[${did}] selectAreas failed: ${err}`); throw err; }
+      try {
+        await client.selectAreas(areaIds);
+      } catch (err) {
+        this.log.error(`[${did}] selectAreas failed: ${err}`);
+        throw err;
+      }
     });
 
     vacuum.addCommandHandler('RvcRunMode.changeToMode', async ({ request }: { request: { newMode: number } }) => {
@@ -134,7 +143,10 @@ export class VacuumAccessory extends BaseDeviceAccessory {
         } else if (mode === 2) {
           await client.startMapping();
         }
-      } catch (err) { this.log.error(`[${did}] changeToMode failed: ${err}`); throw err; }
+      } catch (err) {
+        this.log.error(`[${did}] changeToMode failed: ${err}`);
+        throw err;
+      }
     });
 
     vacuum.addCommandHandler('RvcCleanMode.changeToMode', async ({ request }: { request: { newMode: number } }) => {
@@ -145,7 +157,12 @@ export class VacuumAccessory extends BaseDeviceAccessory {
         2: CleanMode.VacuumThenMop,
       };
       if (mode in modeMap) {
-        try { await client.setCleanMode(modeMap[mode]!); } catch (err) { this.log.error(`[${did}] setCleanMode failed: ${err}`); throw err; }
+        try {
+          await client.setCleanMode(modeMap[mode] as CleanMode);
+        } catch (err) {
+          this.log.error(`[${did}] setCleanMode failed: ${err}`);
+          throw err;
+        }
       }
     });
   }
@@ -185,9 +202,15 @@ export class VacuumAccessory extends BaseDeviceAccessory {
       lastMopPresent = currentMopPresent;
     });
 
-    client.on('error', (err: Error) => { this.log.error(`[${did}] Vacuum error: ${err}`); });
-    client.on('connected', () => { this.log.info(`[${did}] Vacuum client connected`); });
-    client.on('disconnected', () => { this.log.warn(`[${did}] Vacuum client disconnected`); });
+    client.on('error', (err: Error) => {
+      this.log.error(`[${did}] Vacuum error: ${err}`);
+    });
+    client.on('connected', () => {
+      this.log.info(`[${did}] Vacuum client connected`);
+    });
+    client.on('disconnected', () => {
+      this.log.warn(`[${did}] Vacuum client disconnected`);
+    });
   }
 
   private mapState(state: VacuumState): number {
@@ -250,12 +273,16 @@ export class VacuumAccessory extends BaseDeviceAccessory {
     try {
       const info = await client.getInfo();
       this.log.info(`Model: ${info.model} | FW: ${info.firmwareVersion} | SN: ${info.serialNumber}`);
-    } catch (_err) { /* non-fatal */ }
+    } catch (_err) {
+      /* non-fatal */
+    }
 
     try {
       const status = await client.getStatus();
       this.log.info(`State: ${status.state} | Battery: ${status.batteryLevel}% | Clean: ${status.cleanMode}`);
-    } catch (_err) { /* non-fatal */ }
+    } catch (_err) {
+      /* non-fatal */
+    }
 
     this.log.info(`Maps: ${maps.length} | Areas: ${areas.length} | Matter areas: ${supportedAreas.length}`);
     this.log.info(`${'='.repeat(80)}\n`);

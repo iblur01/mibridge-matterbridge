@@ -6,6 +6,7 @@
  */
 import type { DeviceInfo } from '@mibridge/core';
 import type { MatterbridgeEndpoint } from 'matterbridge';
+
 import type { XiaomiLogger } from './DeviceService.js';
 
 /** Minimal platform surface needed by accessories — avoids circular imports. */
@@ -31,9 +32,5 @@ export abstract class BaseDeviceAccessory {
    * event listeners, then call platform.registerDevice().
    * Returns the registered endpoint, or null if validateDevice() rejected it.
    */
-  abstract register(
-    platform: PlatformContext,
-    device: DeviceInfo,
-    client: unknown,
-  ): Promise<MatterbridgeEndpoint | null>;
+  abstract register(platform: PlatformContext, device: DeviceInfo, client: unknown): Promise<MatterbridgeEndpoint | null>;
 }

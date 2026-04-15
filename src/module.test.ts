@@ -4,6 +4,7 @@
  * @file module.test.ts
  */
 import { EventEmitter } from 'node:events';
+
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const LogLevel = { Debug: 'debug', Info: 'info', Warn: 'warn', Error: 'error' } as const;
@@ -12,9 +13,9 @@ const LogLevel = { Debug: 'debug', Info: 'info', Warn: 'warn', Error: 'error' } 
 
 function makeMockService(devices: unknown[] = []) {
   return {
-    connect: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    connect: jest.fn<(d: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
     getDevices: jest.fn<() => unknown[]>().mockReturnValue(devices),
-    connectDevice: jest.fn<() => Promise<EventEmitter>>().mockResolvedValue(new EventEmitter()),
+    connectDevice: jest.fn<(did: string) => Promise<EventEmitter>>().mockResolvedValue(new EventEmitter()),
     disconnect: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
   };
 }
@@ -27,7 +28,7 @@ function makeMockAccessory() {
 
 const MockServiceClass = jest.fn();
 const MockAccessoryClass = jest.fn();
-const mockListDevices = jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]);
+const mockListDevices = jest.fn<(session: unknown, region: string) => Promise<unknown[]>>().mockResolvedValue([]);
 
 // ─── Mock registry with one entry ─────────────────────────────────────────────
 
@@ -51,14 +52,28 @@ class MockMatterbridgeDynamicPlatform {
     this.config = config;
   }
 
-  verifyMatterbridgeVersion(_v: string) { return true; }
-  clearSelect() { return Promise.resolve(); }
+  verifyMatterbridgeVersion(_v: string) {
+    return true;
+  }
+  clearSelect() {
+    return Promise.resolve();
+  }
   setSelectDevice(_did: string, _name: string) {}
-  validateDevice(_args: string[]) { return true; }
-  registerDevice(_device: unknown) { return Promise.resolve(); }
-  onConfigure() { return Promise.resolve(); }
-  onShutdown(_reason?: string) { return Promise.resolve(); }
-  unregisterAllDevices() { return Promise.resolve(); }
+  validateDevice(_args: string[]) {
+    return true;
+  }
+  registerDevice(_device: unknown) {
+    return Promise.resolve();
+  }
+  onConfigure() {
+    return Promise.resolve();
+  }
+  onShutdown(_reason?: string) {
+    return Promise.resolve();
+  }
+  unregisterAllDevices() {
+    return Promise.resolve();
+  }
 }
 
 jest.unstable_mockModule('matterbridge', () => ({
@@ -75,11 +90,15 @@ const initializePlugin = moduleExports.default;
 function makeLog() {
   return { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
 }
-function makeMatterbridge() { return { matterbridgeVersion: '3.7.2' }; }
+function makeMatterbridge() {
+  return { matterbridgeVersion: '3.7.2' };
+}
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
     name: 'matterbridge-mibridge',
     type: 'DynamicPlatform',
+    version: '0.0.1',
+    debug: false,
     session: { userId: 'u1', ssecurity: 's1', serviceToken: 'tk1' },
     region: 'de',
     pollInterval: 5000,
@@ -131,10 +150,7 @@ describe('MibridgePlatform', () => {
       const platform = new MibridgePlatform(makeMatterbridge() as any, makeLog() as any, makeConfig());
       await platform.onStart('test');
 
-      expect(mockListDevices).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'u1' }),
-        'de',
-      );
+      expect(mockListDevices).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1' }), 'de');
     });
 
     it('calls service.connect with all devices from listDevices', async () => {
@@ -175,9 +191,7 @@ describe('MibridgePlatform', () => {
       mockListDevices.mockResolvedValue(devices);
 
       const mockService = makeMockService(devices);
-      mockService.connectDevice
-        .mockRejectedValueOnce(new Error('connection failed'))
-        .mockResolvedValueOnce(new EventEmitter());
+      mockService.connectDevice.mockRejectedValueOnce(new Error('connection failed')).mockResolvedValueOnce(new EventEmitter());
 
       const mockAccessory = makeMockAccessory();
       MockServiceClass.mockImplementation(() => mockService);
@@ -228,6 +242,51 @@ describe('MibridgePlatform', () => {
     it('returns a MibridgePlatform instance', () => {
       const result = initializePlugin(makeMatterbridge() as any, makeLog() as any, makeConfig());
       expect(result).toBeInstanceOf(MibridgePlatform);
+    });
+  });
+
+  describe('onConfigure', () => {
+    it('calls super.onConfigure and logs', async () => {
+      const log = makeLog();
+      const platform = new MibridgePlatform(makeMatterbridge() as any, log as any, makeConfig());
+      await platform.onConfigure();
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('onConfigure'));
+    });
+  });
+
+  describe('onChangeLoggerLevel', () => {
+    it('logs the new level', async () => {
+      const log = makeLog();
+      const platform = new MibridgePlatform(makeMatterbridge() as any, log as any, makeConfig());
+      await platform.onChangeLoggerLevel(LogLevel.Debug as any);
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('debug'));
+    });
+  });
+
+  describe('onStart error paths', () => {
+    it('logs error and continues when service.connect fails', async () => {
+      const mockService = makeMockService();
+      mockService.connect.mockRejectedValue(new Error('connect failed'));
+      MockServiceClass.mockImplementation(() => mockService);
+      MockAccessoryClass.mockImplementation(() => makeMockAccessory());
+
+      const log = makeLog();
+      const platform = new MibridgePlatform(makeMatterbridge() as any, log as any, makeConfig());
+      await platform.onStart('test');
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to connect service'));
+    });
+
+    it('logs error when listDevices throws', async () => {
+      mockListDevices.mockRejectedValue(new Error('cloud error'));
+      MockServiceClass.mockImplementation(() => makeMockService());
+      MockAccessoryClass.mockImplementation(() => makeMockAccessory());
+
+      const log = makeLog();
+      const platform = new MibridgePlatform(makeMatterbridge() as any, log as any, makeConfig());
+      await platform.onStart('test');
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to connect to Xiaomi Cloud'));
     });
   });
 });

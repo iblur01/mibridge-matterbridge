@@ -5,37 +5,25 @@
  * @file devices/fountain/FountainAccessory.ts
  * @license Apache-2.0
  */
-import { FountainFaultCode, FountainMode, FountainStatus } from '@mibridge/core';
 import type { DeviceInfo, PetFountainClient } from '@mibridge/core';
-import { MatterbridgeEndpoint, airPurifier, powerSource } from 'matterbridge';
+import { FountainFaultCode, FountainMode, FountainStatus } from '@mibridge/core';
+import { airPurifier, MatterbridgeEndpoint, powerSource } from 'matterbridge';
+
 import { BaseDeviceAccessory, PlatformContext } from '../../platform/DeviceAccessory.js';
 
 // FanMode values from Matter FanControl cluster
 const FanMode = { Off: 0, Low: 1, Medium: 2, High: 3, On: 4, Auto: 5 } as const;
 
 export class FountainAccessory extends BaseDeviceAccessory {
-  async register(
-    platform: PlatformContext,
-    device: DeviceInfo,
-    client: unknown,
-  ): Promise<MatterbridgeEndpoint | null> {
+  async register(platform: PlatformContext, device: DeviceInfo, client: unknown): Promise<MatterbridgeEndpoint | null> {
     const fountainClient = client as PetFountainClient;
     const did = device.did;
 
-    const endpoint = new MatterbridgeEndpoint(
-      [airPurifier, powerSource],
-      { id: `${device.name.replaceAll(' ', '')}-${did}` },
-    );
+    const endpoint = new MatterbridgeEndpoint([airPurifier, powerSource], { id: `${device.name.replaceAll(' ', '')}-${did}` });
 
     endpoint
       .createDefaultIdentifyClusterServer()
-      .createDefaultBridgedDeviceBasicInformationClusterServer(
-        device.name,
-        did,
-        0xfff1,
-        'Matterbridge',
-        'Matterbridge Pet Fountain',
-      )
+      .createDefaultBridgedDeviceBasicInformationClusterServer(device.name, did, 0xfff1, 'Matterbridge', 'Matterbridge Pet Fountain')
       .createDefaultPowerSourceRechargeableBatteryClusterServer(200)
       .createDefaultFanControlClusterServer()
       .createDefaultActivatedCarbonFilterMonitoringClusterServer(100, 0)
@@ -124,11 +112,7 @@ export class FountainAccessory extends BaseDeviceAccessory {
 
     // Filter life (0-100%)
     endpoint.setAttribute('activatedCarbonFilterMonitoring', 'condition', status.filterLifeLeft);
-    endpoint.setAttribute(
-      'activatedCarbonFilterMonitoring',
-      'changeIndication',
-      this.filterIndication(status.fault, status.filterLifeLeft),
-    );
+    endpoint.setAttribute('activatedCarbonFilterMonitoring', 'changeIndication', this.filterIndication(status.fault, status.filterLifeLeft));
 
     // Water shortage: true if explicit shortage OR lid is removed
     const shortage = status.waterShortage || status.fault === FountainFaultCode.LidRemoved;
@@ -156,6 +140,10 @@ export class FountainAccessory extends BaseDeviceAccessory {
   /**
    * Maps fault code + filter life percentage to a Matter ResourceMonitoring
    * ChangeIndication value: 0 = Ok, 1 = Warning, 2 = Critical.
+   *
+   * @param {FountainFaultCode} fault - The current fault code reported by the fountain.
+   * @param {number} filterLifeLeft - Remaining filter life as a percentage (0–100).
+   * @returns {number} 0 for Ok, 1 for Warning, 2 for Critical.
    */
   private filterIndication(fault: FountainFaultCode, filterLifeLeft: number): number {
     if (fault === FountainFaultCode.FilterExpired) return 2; // Critical

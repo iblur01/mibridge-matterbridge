@@ -14,6 +14,7 @@ declare module 'matterbridge' {
 
   export class MatterbridgeEndpoint {
     constructor(...args: unknown[]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   }
 
@@ -42,6 +43,7 @@ declare module 'matterbridge' {
 
   export class MatterbridgeFanControlServer {
     constructor(...args: unknown[]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   }
 
@@ -56,6 +58,7 @@ declare module 'matterbridge/devices' {
 
   export class RoboticVacuumCleaner extends MatterbridgeEndpoint {
     constructor(...args: unknown[]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   }
 }

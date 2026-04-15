@@ -56,9 +56,9 @@ In the Matterbridge frontend, open the plugin settings and fill in:
 
 ## Supported devices
 
-| Category | Models |
-| --- | --- |
-| Robot vacuum | Dreame (all MIoT-based models) |
+| Category     | Models                             |
+| ------------ | ---------------------------------- |
+| Robot vacuum | Dreame (all MIoT-based models)     |
 | Pet fountain | Xiaomi Pet Waterer (`pet_waterer`) |
 
 Additional Xiaomi device categories will be added as `@mibridge/core` expands its coverage.

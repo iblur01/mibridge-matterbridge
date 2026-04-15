@@ -5,8 +5,9 @@
  * @file devices/fan/FanAccessory.ts
  * @license Apache-2.0
  */
-import type { DeviceInfo, FanClient, FanStatus, FanSpeed } from '@mibridge/core';
-import { MatterbridgeEndpoint, MatterbridgeFanControlServer, fanDevice } from 'matterbridge';
+import type { DeviceInfo, FanClient, FanSpeed, FanStatus } from '@mibridge/core';
+import { fanDevice, MatterbridgeEndpoint, MatterbridgeFanControlServer } from 'matterbridge';
+
 import { BaseDeviceAccessory, PlatformContext } from '../../platform/DeviceAccessory.js';
 
 // Matter FanControl.FanMode values
@@ -23,18 +24,11 @@ type RockSetting = { rockLeftRight: boolean; rockUpDown: boolean; rockRound: boo
 const ROCK_OFF: RockSetting = { rockLeftRight: false, rockUpDown: false, rockRound: false };
 
 export class FanAccessory extends BaseDeviceAccessory {
-  async register(
-    platform: PlatformContext,
-    device: DeviceInfo,
-    client: unknown,
-  ): Promise<MatterbridgeEndpoint | null> {
+  async register(platform: PlatformContext, device: DeviceInfo, client: unknown): Promise<MatterbridgeEndpoint | null> {
     const fanClient = client as FanClient;
     const did = device.did;
 
-    const endpoint = new MatterbridgeEndpoint(
-      [fanDevice],
-      { id: `${device.name.replaceAll(' ', '')}-${did}` },
-    );
+    const endpoint = new MatterbridgeEndpoint([fanDevice], { id: `${device.name.replaceAll(' ', '')}-${did}` });
 
     // Get base FanControlServer (without Auto/Step) via prototype chain from MatterbridgeFanControlServer.
     // MatterbridgeFanControlServer extends FanControlServer.with(Auto, Step),
@@ -44,15 +38,7 @@ export class FanAccessory extends BaseDeviceAccessory {
     const FanControlServer = Object.getPrototypeOf(Object.getPrototypeOf(MatterbridgeFanControlServer)) as any;
     const RockingFanControlServer = FanControlServer.with('Rocking') as typeof MatterbridgeFanControlServer;
 
-    endpoint
-      .createDefaultIdentifyClusterServer()
-      .createDefaultBridgedDeviceBasicInformationClusterServer(
-        device.name,
-        did,
-        0xfff1,
-        'Matterbridge',
-        'Matterbridge Fan',
-      );
+    endpoint.createDefaultIdentifyClusterServer().createDefaultBridgedDeviceBasicInformationClusterServer(device.name, did, 0xfff1, 'Matterbridge', 'Matterbridge Fan');
 
     // SPD + RCK cluster: percent speed + rock/oscillation, without Auto (AUT).
     // fanModeSequence=0 (OffLowMedHigh) is only valid when AUT is absent — correct here.

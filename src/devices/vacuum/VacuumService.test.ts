@@ -4,6 +4,7 @@
  * @file devices/vacuum/VacuumService.test.ts
  */
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
 import type { XiaomiServiceConfig } from '../../platform/DeviceService.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ describe('VacuumService', () => {
       await svc.connect([vacuumDevice, fountainDevice] as any);
 
       expect(svc.getDevices()).toHaveLength(1);
-      expect(svc.getDevices()[0]!.did).toBe('did-vac-1');
+      expect(svc.getDevices()[0].did).toBe('did-vac-1');
       expect(mockDreameVacuumClient).toHaveBeenCalledTimes(1);
       expect(mockDreameVacuumClient).toHaveBeenCalledWith({
         deviceId: 'did-vac-1',
@@ -153,6 +154,18 @@ describe('VacuumService', () => {
       await svc.disconnect();
 
       expect(mockClientInstance.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('logs error when disconnect throws', async () => {
+      const mockClientInstance = makeMockClient(true);
+      mockClientInstance.disconnect.mockRejectedValue(new Error('disconnect failed'));
+      mockDreameVacuumClient.mockImplementation(() => mockClientInstance);
+
+      const svc = new VacuumService(log as any, makeConfig());
+      await svc.connect([vacuumDevice] as any);
+      await svc.disconnect(); // should not throw
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('disconnect failed'));
     });
   });
 });

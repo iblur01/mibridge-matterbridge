@@ -1,29 +1,34 @@
-#!/usr/bin/env node
+/* eslint-disable no-console, n/no-process-exit */
 // scripts/release.mjs
-import { spawnSync, execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { execSync, spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
 // ── ANSI colors ──────────────────────────────────────────────────────────────
 const C = {
-  green:  '\x1b[32m',
-  red:    '\x1b[31m',
+  green: '\x1b[32m',
+  red: '\x1b[31m',
   yellow: '\x1b[33m',
-  blue:   '\x1b[34m',
-  bold:   '\x1b[1m',
-  dim:    '\x1b[2m',
-  reset:  '\x1b[0m',
+  blue: '\x1b[34m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  reset: '\x1b[0m',
 };
 
 const IS_RELEASE = process.argv.includes('--release');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Run a shell command and capture output. Exits on failure. */
+/**
+ * Run a shell command and capture output. Exits on failure.
+ *
+ * @param {string} label - Display label for the step
+ * @param {string} cmd - Shell command to run
+ */
 function step(label, cmd) {
   const padded = label.padEnd(28);
   process.stdout.write(`  ${C.dim}⏳${C.reset} ${padded}`);
@@ -48,23 +53,37 @@ function step(label, cmd) {
   process.stdout.write(`\r  ${C.green}✅${C.reset} ${padded} ${C.dim}${elapsed}${C.reset}\n`);
 }
 
-/** Run a git command and return trimmed stdout. Throws on error. */
+/**
+ * Run a git command and return trimmed stdout. Throws on error.
+ *
+ * @param {string} args - Git arguments
+ * @returns {string} Trimmed stdout
+ */
 function git(args) {
   return execSync(`git ${args}`, { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
-/** Read and parse package.json */
+/**
+ * Read and parse package.json.
+ *
+ * @returns {object} Parsed package.json
+ */
 function readPkg() {
   return JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'));
 }
 
-/** Write package.json preserving formatting */
+/**
+ * Write package.json preserving formatting.
+ *
+ * @param {object} pkg - Package data to write
+ */
 function writePkg(pkg) {
   writeFileSync(resolve(ROOT, 'package.json'), JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 }
 
 // ── Prerequisite checks ──────────────────────────────────────────────────────
 
+/** Verify prerequisites before running CI or release. */
 function checkPrereqs() {
   // 1. No uncommitted changes
   const status = git('status --porcelain');
@@ -98,11 +117,13 @@ checkPrereqs();
 
 // ── CI steps ─────────────────────────────────────────────────────────────────
 
-step('Clean build',        'npm run cleanBuild');
-step('Lint',               'npm run lint');
-step('Format check',       'npm run format:check');
-step('Typecheck',          'npm run test:typecheck');
-step('Tests + coverage',   'npm run test:coverage');
-step('Production build',   'npm run buildProduction');
+step('Clean build', 'npm run cleanBuild');
+step('Lint', 'npm run lint');
+step('Format check', 'npm run format:check');
+step('Typecheck', 'npm run test:typecheck');
+step('Tests + coverage', 'npm run test:coverage');
+step('Production build', 'npm run buildProduction');
 
 console.log(`\n${C.green}${C.bold}🎉 CI passed!${C.reset}\n`);
+
+export { readPkg, writePkg };

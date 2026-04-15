@@ -5,6 +5,7 @@
  * @license Apache-2.0
  */
 import { DeviceInfo, DreameVacuumClient } from '@mibridge/core';
+
 import { BaseDeviceService } from '../../platform/DeviceService.js';
 
 export class VacuumService extends BaseDeviceService {
@@ -14,9 +15,7 @@ export class VacuumService extends BaseDeviceService {
   private devices: DeviceInfo[] = [];
 
   async connect(allDevices: DeviceInfo[]): Promise<void> {
-    const vacuums = allDevices.filter((d) =>
-      this.modelPatterns.some((p) => d.model.includes(p)),
-    );
+    const vacuums = allDevices.filter((d) => this.modelPatterns.some((p) => d.model.includes(p)));
     this.log.info(`Found ${vacuums.length} vacuum device(s): ${vacuums.map((v) => `${v.name} (${v.model})`).join(', ')}`);
 
     for (const device of vacuums) {

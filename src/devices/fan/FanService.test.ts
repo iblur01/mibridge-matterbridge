@@ -4,6 +4,7 @@
  * @file devices/fan/FanService.test.ts
  */
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
 import type { XiaomiServiceConfig } from '../../platform/DeviceService.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ describe('FanService', () => {
       await svc.connect([fanDevice, vacuumDevice] as any);
 
       expect(svc.getDevices()).toHaveLength(1);
-      expect(svc.getDevices()[0]!.did).toBe('did-fan-1');
+      expect(svc.getDevices()[0].did).toBe('did-fan-1');
       expect(mockFanClient).toHaveBeenCalledTimes(1);
       expect(mockFanClient).toHaveBeenCalledWith({
         deviceId: 'did-fan-1',
@@ -151,6 +152,18 @@ describe('FanService', () => {
       await svc.disconnect();
 
       expect(mockClientInstance.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('logs error when disconnect throws', async () => {
+      const mockClientInstance = makeMockClient(true);
+      mockClientInstance.disconnect.mockRejectedValue(new Error('disconnect failed'));
+      mockFanClient.mockImplementation(() => mockClientInstance);
+
+      const svc = new FanService(log as any, makeConfig());
+      await svc.connect([fanDevice] as any);
+      await svc.disconnect(); // should not throw
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('disconnect failed'));
     });
   });
 });

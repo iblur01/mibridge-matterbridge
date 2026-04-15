@@ -7,13 +7,22 @@
  */
 import { listDevices, Session } from '@mibridge/core';
 import { MatterbridgeDynamicPlatform, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
-import { BaseDeviceService } from './platform/DeviceService.js';
+
 import { PlatformContext } from './platform/DeviceAccessory.js';
+import { BaseDeviceService } from './platform/DeviceService.js';
 import { registry } from './platform/registry.js';
 
 type PlatformLogger = ConstructorParameters<typeof MatterbridgeDynamicPlatform>[1];
 type PlatformLogLevel = Parameters<MatterbridgeDynamicPlatform['onChangeLoggerLevel']>[0];
 
+/**
+ * Matterbridge plugin entry point — instantiates MibridgePlatform.
+ *
+ * @param {PlatformMatterbridge} matterbridge - The Matterbridge host object.
+ * @param {PlatformLogger} log - The platform logger.
+ * @param {PlatformConfig} config - The plugin configuration.
+ * @returns {MibridgePlatform} A new MibridgePlatform instance.
+ */
 export default function initializePlugin(matterbridge: PlatformMatterbridge, log: PlatformLogger, config: PlatformConfig): MibridgePlatform {
   return new MibridgePlatform(matterbridge, log, config);
 }
@@ -62,9 +71,7 @@ export class MibridgePlatform extends MatterbridgeDynamicPlatform implements Pla
         const service = new entry.ServiceClass(this.log, {
           session,
           region,
-          pollInterval: entry.ServiceClass.name === 'FountainService' ? fountainPollInterval
-                      : entry.ServiceClass.name === 'FanService' ? fanPollInterval
-                      : vacuumPollInterval,
+          pollInterval: entry.ServiceClass.name === 'FountainService' ? fountainPollInterval : entry.ServiceClass.name === 'FanService' ? fanPollInterval : vacuumPollInterval,
         });
         try {
           await service.connect(allDevices);

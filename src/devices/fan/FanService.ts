@@ -5,6 +5,7 @@
  * @license Apache-2.0
  */
 import { DeviceInfo, FanClient } from '@mibridge/core';
+
 import { BaseDeviceService } from '../../platform/DeviceService.js';
 
 export class FanService extends BaseDeviceService {
@@ -14,9 +15,7 @@ export class FanService extends BaseDeviceService {
   private devices: DeviceInfo[] = [];
 
   async connect(allDevices: DeviceInfo[]): Promise<void> {
-    const fans = allDevices.filter((d) =>
-      this.modelPatterns.some((p) => d.model.includes(p)),
-    );
+    const fans = allDevices.filter((d) => this.modelPatterns.some((p) => d.model.includes(p)));
     this.log.info(`Found ${fans.length} fan device(s): ${fans.map((f) => `${f.name} (${f.model})`).join(', ')}`);
 
     for (const device of fans) {

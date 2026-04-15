@@ -5,6 +5,7 @@
  * @license Apache-2.0
  */
 import { DeviceInfo, PetFountainClient } from '@mibridge/core';
+
 import { BaseDeviceService } from '../../platform/DeviceService.js';
 
 export class FountainService extends BaseDeviceService {
@@ -14,9 +15,7 @@ export class FountainService extends BaseDeviceService {
   private devices: DeviceInfo[] = [];
 
   async connect(allDevices: DeviceInfo[]): Promise<void> {
-    const fountains = allDevices.filter((d) =>
-      this.modelPatterns.some((p) => d.model.includes(p)),
-    );
+    const fountains = allDevices.filter((d) => this.modelPatterns.some((p) => d.model.includes(p)));
     this.log.info(`Found ${fountains.length} fountain device(s): ${fountains.map((f) => `${f.name} (${f.model})`).join(', ')}`);
 
     for (const device of fountains) {

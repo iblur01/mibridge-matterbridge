@@ -4,6 +4,7 @@
  * @file devices/fountain/FountainService.test.ts
  */
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
 import type { XiaomiServiceConfig } from '../../platform/DeviceService.js';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ describe('FountainService', () => {
       await svc.connect([fountainDevice, vacuumDevice] as any);
 
       expect(svc.getDevices()).toHaveLength(1);
-      expect(svc.getDevices()[0]!.did).toBe('did-fountain-1');
+      expect(svc.getDevices()[0].did).toBe('did-fountain-1');
       expect(mockPetFountainClient).toHaveBeenCalledTimes(1);
       expect(mockPetFountainClient).toHaveBeenCalledWith({
         deviceId: 'did-fountain-1',
@@ -151,6 +152,18 @@ describe('FountainService', () => {
       await svc.disconnect();
 
       expect(mockClientInstance.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('logs error when disconnect throws', async () => {
+      const mockClientInstance = makeMockClient(true);
+      mockClientInstance.disconnect.mockRejectedValue(new Error('disconnect failed'));
+      mockPetFountainClient.mockImplementation(() => mockClientInstance);
+
+      const svc = new FountainService(log as any, makeConfig());
+      await svc.connect([fountainDevice] as any);
+      await svc.disconnect(); // should not throw
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('disconnect failed'));
     });
   });
 });

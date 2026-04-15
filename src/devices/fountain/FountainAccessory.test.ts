@@ -4,6 +4,7 @@
  * @file devices/fountain/FountainAccessory.test.ts
  */
 import { EventEmitter } from 'node:events';
+
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 // ─── Enum values ──────────────────────────────────────────────────────────────
@@ -43,12 +44,10 @@ class MockEndpoint extends EventEmitter {
     this.commandHandlers.set(name, handler);
   });
 
-  subscribeAttribute = jest.fn(
-    async (cluster: string, attr: string, listener: (newValue: unknown, oldValue: unknown, context: { offline?: boolean }) => void) => {
-      this.attributeListeners.set(`${cluster}.${attr}`, listener);
-      return true;
-    }
-  );
+  subscribeAttribute = jest.fn(async (cluster: string, attr: string, listener: (newValue: unknown, oldValue: unknown, context: { offline?: boolean }) => void, _log?: unknown) => {
+    this.attributeListeners.set(`${cluster}.${attr}`, listener);
+    return true;
+  });
 
   async invokeCommand(name: string, ...args: unknown[]) {
     const handler = this.commandHandlers.get(name);
@@ -92,16 +91,18 @@ function makePlatform() {
     log: makeLog() as any,
     verbose: false,
     setSelectDevice: jest.fn(),
-    validateDevice: jest.fn<() => boolean>().mockReturnValue(true),
+    validateDevice: jest.fn<(args: string[]) => boolean>().mockReturnValue(true),
     registerDevice: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
   };
 }
+
+type FountainStatus = { on: boolean; mode: string; fault: string; waterShortage: boolean; filterLifeLeft: number; filterLeftTime: number; batteryLevel: number };
 
 function makeFountainClient() {
   const emitter = new EventEmitter();
   return Object.assign(emitter, {
     isConnected: jest.fn<() => boolean>().mockReturnValue(true),
-    getStatus: jest.fn().mockResolvedValue({
+    getStatus: jest.fn<() => Promise<FountainStatus>>().mockResolvedValue({
       on: true,
       mode: FountainMode.Continuous,
       fault: FountainFaultCode.None,
@@ -110,8 +111,8 @@ function makeFountainClient() {
       filterLeftTime: 12,
       batteryLevel: 75,
     }),
-    setOn: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    setMode: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    setOn: jest.fn<(on: boolean) => Promise<void>>().mockResolvedValue(undefined),
+    setMode: jest.fn<(mode: string) => Promise<void>>().mockResolvedValue(undefined),
     resetFilter: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
   });
 }
@@ -138,10 +139,7 @@ describe('FountainAccessory', () => {
       await accessory.register(platform, deviceInfo as any, client);
 
       expect(MockMatterbridgeEndpoint).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'MA-airPurifier' }),
-          expect.objectContaining({ name: 'MA-powerSource' }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ name: 'MA-airPurifier' }), expect.objectContaining({ name: 'MA-powerSource' })]),
         expect.objectContaining({ id: expect.stringContaining('did-1') }),
       );
     });
@@ -153,7 +151,7 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
       expect(endpoint.createDefaultIdentifyClusterServer).toHaveBeenCalled();
       expect(endpoint.createDefaultBridgedDeviceBasicInformationClusterServer).toHaveBeenCalled();
       expect(endpoint.createDefaultFanControlClusterServer).toHaveBeenCalled();
@@ -169,13 +167,8 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
-      expect(endpoint.subscribeAttribute).toHaveBeenCalledWith(
-        'fanControl',
-        'fanMode',
-        expect.any(Function),
-        expect.anything(),
-      );
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
+      expect(endpoint.subscribeAttribute).toHaveBeenCalledWith('fanControl', 'fanMode', expect.any(Function), expect.anything());
     });
 
     it('calls registerDevice on the platform when validateDevice returns true', async () => {
@@ -209,7 +202,7 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       // initial status is on=true, mode=continuous from getStatus mock
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(3); // High
@@ -231,7 +224,7 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(1); // Low
     });
 
@@ -251,7 +244,7 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(5); // Auto
     });
 
@@ -271,7 +264,7 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
       expect(endpoint.getAttribute('fanControl', 'fanMode')).toBe(0); // Off
     });
 
@@ -282,7 +275,7 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
       expect(endpoint.getAttribute('powerSource', 'batPercentRemaining')).toBe(150);
     });
 
@@ -293,7 +286,7 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
       expect(endpoint.getAttribute('activatedCarbonFilterMonitoring', 'condition')).toBe(80);
       expect(endpoint.getAttribute('activatedCarbonFilterMonitoring', 'changeIndication')).toBe(0);
     });
@@ -305,7 +298,7 @@ describe('FountainAccessory', () => {
 
       await accessory.register(platform, deviceInfo as any, client);
 
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
       expect(endpoint.getAttribute('booleanState', 'stateValue')).toBe(false);
     });
   });
@@ -316,7 +309,7 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       client.emit('statusChange', {
         on: false,
@@ -336,7 +329,7 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       client.emit('statusChange', {
         on: true,
@@ -356,7 +349,7 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       client.emit('statusChange', {
         on: true,
@@ -376,7 +369,7 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       client.emit('statusChange', {
         on: true,
@@ -396,7 +389,7 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       client.emit('statusChange', {
         on: true,
@@ -418,7 +411,7 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       await endpoint.triggerAttributeChange('fanControl', 'fanMode', 0, 3);
 
@@ -439,7 +432,7 @@ describe('FountainAccessory', () => {
       });
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       await endpoint.triggerAttributeChange('fanControl', 'fanMode', 1, 0);
 
@@ -461,7 +454,7 @@ describe('FountainAccessory', () => {
       });
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       await endpoint.triggerAttributeChange('fanControl', 'fanMode', 3, 5);
 
@@ -483,7 +476,7 @@ describe('FountainAccessory', () => {
       });
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       await endpoint.triggerAttributeChange('fanControl', 'fanMode', 5, 0);
 
@@ -496,13 +489,14 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       // Trigger the listener directly with offline=true
-      const listener = (endpoint.subscribeAttribute as jest.MockedFunction<typeof endpoint.subscribeAttribute>)
-        .mock.calls.find(([c, a]) => c === 'fanControl' && a === 'fanMode')?.[2];
-      expect(listener).toBeDefined();
-      await listener!(0, 3, { offline: true });
+      const listenerCall = (endpoint.subscribeAttribute as jest.MockedFunction<typeof endpoint.subscribeAttribute>).mock.calls.find(
+        ([c, a]) => c === 'fanControl' && a === 'fanMode',
+      ) as [string, string, (newValue: unknown, oldValue: unknown, ctx: { offline?: boolean }) => Promise<void>] | undefined;
+      expect(listenerCall).toBeDefined();
+      await (listenerCall as [string, string, (newValue: unknown, oldValue: unknown, ctx: { offline?: boolean }) => Promise<void>])[2](0, 3, { offline: true });
 
       expect(client.setOn).not.toHaveBeenCalled();
     });
@@ -514,11 +508,144 @@ describe('FountainAccessory', () => {
       const client = makeFountainClient();
       const platform = makePlatform();
       await accessory.register(platform, deviceInfo as any, client);
-      const endpoint = MockMatterbridgeEndpoint.mock.results[0]!.value as MockEndpoint;
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
 
       await endpoint.invokeCommand('resetCondition');
 
       expect(client.resetFilter).toHaveBeenCalledTimes(1);
+    });
+
+    it('resetCondition rethrows when resetFilter fails', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      client.resetFilter.mockRejectedValue(new Error('filter error'));
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
+
+      await expect(endpoint.invokeCommand('resetCondition')).rejects.toThrow('filter error');
+    });
+  });
+
+  describe('device events', () => {
+    it('statusChange with verbose=true logs detailed info', async () => {
+      const log2 = makeLog();
+      const accessory = new FountainAccessory(log2 as any, true);
+      const client = makeFountainClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+
+      client.emit('statusChange', {
+        on: true,
+        fault: FountainFaultCode.None,
+        waterShortage: false,
+        filterLifeLeft: 80,
+        filterLeftTime: 12,
+        batteryLevel: 75,
+        mode: FountainMode.Continuous,
+      });
+
+      expect(log2.info).toHaveBeenCalledWith(expect.stringContaining('battery=75%'));
+    });
+
+    it('error event logs the error message', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+
+      client.emit('error', new Error('connection lost'));
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('connection lost'));
+    });
+
+    it('connected event logs connection', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+
+      client.emit('connected');
+
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('connected'));
+    });
+
+    it('disconnected event logs disconnection', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+
+      client.emit('disconnected');
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('disconnected'));
+    });
+
+    it('statusChange with PumpBlocked fault logs a warning', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+
+      client.emit('statusChange', {
+        on: true,
+        fault: FountainFaultCode.PumpBlocked,
+        waterShortage: false,
+        filterLifeLeft: 80,
+        filterLeftTime: 12,
+        batteryLevel: 75,
+        mode: FountainMode.Continuous,
+      });
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Pump blocked'));
+    });
+  });
+
+  describe('fanMode subscriber error path and null mode', () => {
+    it('logs error when setOn throws during fanMode change', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      client.setOn.mockRejectedValue(new Error('setOn failed'));
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
+
+      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 0, 3);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to apply fanMode'));
+    });
+
+    it('fanMode with unknown value calls setOn(true) but not setMode', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
+
+      // fanMode 99 is unknown → fanModeToFountainMode returns null
+      await endpoint.triggerAttributeChange('fanControl', 'fanMode', 99, 0);
+
+      expect(client.setOn).toHaveBeenCalledWith(true);
+      expect(client.setMode).not.toHaveBeenCalled();
+    });
+
+    it('filterIndication Critical when filterLifeLeft <= 10', async () => {
+      const accessory = new FountainAccessory(log as any, false);
+      const client = makeFountainClient();
+      client.getStatus.mockResolvedValue({
+        on: true,
+        mode: FountainMode.Continuous,
+        fault: FountainFaultCode.None,
+        waterShortage: false,
+        filterLifeLeft: 5,
+        filterLeftTime: 0,
+        batteryLevel: 75,
+      });
+      const platform = makePlatform();
+      await accessory.register(platform, deviceInfo as any, client);
+      const endpoint = MockMatterbridgeEndpoint.mock.results[0].value as MockEndpoint;
+
+      expect(endpoint.getAttribute('activatedCarbonFilterMonitoring', 'changeIndication')).toBe(2);
     });
   });
 });
