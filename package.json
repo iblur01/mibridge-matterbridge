@@ -1,6 +1,6 @@
 {
   "name": "matterbridge-mibridge",
-  "version": "0.0.1-alpha",
+  "version": "0.1.0",
   "description": "Matterbridge MiBridge Plugin — bridges MiHome API to Matter",
   "author": "https://github.com/iblur01",
   "homepage": "https://github.com/iblur01/mibridge-matterbridge",
